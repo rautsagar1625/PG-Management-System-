@@ -1,0 +1,19 @@
+{
+  "name": "@pg-system/types",
+  "version": "0.0.1",
+  "private": true,
+  "description": "Shared TypeScript types for the PG Management System",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "type-check": "tsc --noEmit",
+    "clean": "rm -rf dist"
+  },
+  "devDependencies": {
+    "@pg-system/config": "workspace:*",
+    "typescript": "^5.3.3"
+  }
+}

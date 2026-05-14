@@ -1,0 +1,635 @@
+// PG Management System — Production Schema
+// PostgreSQL + Prisma 5.x
+//
+// Migration note: run `pnpm db:migrate` after any schema change.
+// Never use Float for money — all monetary fields use Decimal(10,2).
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─────────────────────────────────────────
+// USERS & AUTH
+// ─────────────────────────────────────────
+
+model User {
+  id           String     @id @default(cuid())
+  name         String
+  email        String     @unique
+  phone        String?    @unique
+  passwordHash String
+  systemRole   SystemRole @default(USER)
+  isVerified   Boolean    @default(false)
+  isActive     Boolean    @default(true)
+  lastLoginAt  DateTime?
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+
+  // A user can hold ONE role per property (enforced by PropertyRole unique index)
+  // but can be in many properties
+  propertyRoles      PropertyRole[]
+  tenantProfile      Tenant?
+  sessions           Session[]
+  notifications      Notification[]
+  auditLogs          AuditLog[]
+  complaintsRaised   Complaint[]      @relation("ComplaintRaisedBy")
+  complaintsAssigned Complaint[]      @relation("ComplaintAssignedTo")
+  complaintUpdates   ComplaintUpdate[]
+  paymentsRecorded   Payment[]        @relation("PaymentRecordedBy")
+
+  @@index([email])
+  @@index([phone])
+}
+
+// Tracks active refresh tokens. One session = one device login.
+model Session {
+  id        String    @id @default(cuid())
+  userId    String
+  token     String    @unique
+  userAgent String?
+  ipAddress String?
+  expiresAt DateTime
+  revokedAt DateTime?
+  createdAt DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([token])
+  @@index([userId])
+}
+
+enum SystemRole {
+  SUPER_ADMIN
+  USER
+}
+
+// ─────────────────────────────────────────
+// PROPERTY
+// ─────────────────────────────────────────
+
+model Property {
+  id        String         @id @default(cuid())
+  name      String
+  address   String
+  city      String
+  state     String
+  pincode   String
+  type      PropertyType   @default(MIXED)
+  status    PropertyStatus @default(SETUP)
+  amenities String[]       @default([])
+  rules     String[]       @default([])
+  createdAt DateTime       @default(now())
+  updatedAt DateTime       @updatedAt
+
+  roles           PropertyRole[]
+  rooms           Room[]
+  tenants         Tenant[]
+  financialModels FinancialModel[]
+  settlements     Settlement[]
+  complaints      Complaint[]
+  notifications   Notification[]
+  auditLogs       AuditLog[]
+  rentCycles      RentCycle[]
+  payments        Payment[]
+
+  @@index([city])
+  @@index([status])
+}
+
+// One role per user per property. Change role = update existing record.
+model PropertyRole {
+  id         String           @id @default(cuid())
+  propertyId String
+  userId     String
+  role       PropertyRoleType
+  addedBy    String?          // userId of who assigned this
+  createdAt  DateTime         @default(now())
+  updatedAt  DateTime         @updatedAt
+
+  property Property @relation(fields: [propertyId], references: [id])
+  user     User     @relation(fields: [userId], references: [id])
+
+  @@unique([propertyId, userId])
+  @@index([propertyId])
+  @@index([userId])
+}
+
+enum PropertyType {
+  MALE
+  FEMALE
+  MIXED
+}
+
+enum PropertyStatus {
+  SETUP    // Being configured — not yet live
+  ACTIVE   // Fully operational
+  INACTIVE // Closed or paused
+}
+
+enum PropertyRoleType {
+  OWNER       // Owns the building; receives payout
+  OPERATOR    // Runs day-to-day operations
+  CO_OPERATOR // Operations partner; has defined profit share
+  STAFF       // Support (warden, caretaker) — limited permissions
+}
+
+// ─────────────────────────────────────────
+// ROOMS & BEDS
+// ─────────────────────────────────────────
+
+model Room {
+  id              String     @id @default(cuid())
+  propertyId      String
+  number          String     // Display identifier: "101", "G-2", "A1"
+  floor           Int?
+  type            RoomType
+  sharingCapacity Int        // Max occupants: 1, 2, 3, 4, 6
+  monthlyRent     Decimal    @db.Decimal(10, 2) // Default per-bed rent
+  status          RoomStatus @default(AVAILABLE)
+  amenities       String[]   @default([])
+  createdAt       DateTime   @default(now())
+  updatedAt       DateTime   @updatedAt
+
+  property Property @relation(fields: [propertyId], references: [id])
+  beds     Bed[]
+
+  @@unique([propertyId, number])
+  @@index([propertyId, status])
+}
+
+model Bed {
+  id          String    @id @default(cuid())
+  roomId      String
+  label       String    // "A", "B", "C" within a room
+  monthlyRent Decimal?  @db.Decimal(10, 2) // Overrides room rent when set
+  status      BedStatus @default(AVAILABLE)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  room        Room               @relation(fields: [roomId], references: [id])
+  allocations TenantAllocation[]
+
+  @@unique([roomId, label])
+  @@index([roomId, status])
+}
+
+enum RoomType {
+  PRIVATE        // 1 occupant
+  DOUBLE_SHARING // 2 occupants
+  TRIPLE_SHARING // 3 occupants
+  FOUR_SHARING   // 4 occupants
+  SIX_SHARING    // 6 occupants
+}
+
+enum RoomStatus {
+  AVAILABLE
+  PARTIALLY_OCCUPIED
+  FULLY_OCCUPIED
+  UNDER_MAINTENANCE
+  INACTIVE
+}
+
+enum BedStatus {
+  AVAILABLE
+  OCCUPIED
+  RESERVED         // Locked for a tenant in ROOM_FINALIZED state
+  UNDER_MAINTENANCE
+}
+
+// ─────────────────────────────────────────
+// TENANT SYSTEM
+// ─────────────────────────────────────────
+
+model Tenant {
+  id             String        @id @default(cuid())
+  userId         String        @unique
+  propertyId     String
+  tenantCode     String        @unique // Format: PG-XXXXX
+  status         TenantStatus  @default(LEAD)
+  kycStatus      KycStatus     @default(PENDING)
+  leadSource     String?
+  notes          String?
+
+  // Deposit tracking
+  depositAmount  Decimal       @default(0) @db.Decimal(10, 2) // Required deposit
+  depositBalance Decimal       @default(0) @db.Decimal(10, 2) // Amount paid to date
+  depositStatus  DepositStatus @default(PENDING)
+
+  // Lifecycle timestamps
+  visitScheduledAt DateTime?
+  visitedAt        DateTime?
+  moveInDate       DateTime?
+  moveOutDate      DateTime?
+  noticeDate       DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user              User               @relation(fields: [userId], references: [id])
+  property          Property           @relation(fields: [propertyId], references: [id])
+  allocations       TenantAllocation[]
+  documents         TenantDocument[]
+  emergencyContacts EmergencyContact[]
+  rentCycles        RentCycle[]
+  payments          Payment[]
+  receipts          Receipt[]
+  complaints        Complaint[]
+
+  @@index([propertyId, status])
+  @@index([tenantCode])
+}
+
+// ──────────────────────────────────────────────────────────────
+// TENANT ALLOCATION — the heart of the occupancy system
+//
+// Every bed occupancy event (move-in, transfer, move-out) is
+// represented here. History is NEVER deleted — only closed.
+//
+// Rules:
+//  • A tenant can have at most ONE active allocation (isActive=true)
+//  • A bed can have at most ONE active allocation
+//  • These are enforced at the service layer with transactions
+// ──────────────────────────────────────────────────────────────
+model TenantAllocation {
+  id          String           @id @default(cuid())
+  tenantId    String
+  bedId       String
+  startDate   DateTime
+  endDate     DateTime?        // null = currently active
+  isActive    Boolean          @default(true)
+  monthlyRent Decimal          @db.Decimal(10, 2) // Rent locked at allocation time
+  reason      AllocationReason @default(INITIAL)
+  notes       String?
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+
+  tenant Tenant @relation(fields: [tenantId], references: [id])
+  bed    Bed    @relation(fields: [bedId], references: [id])
+
+  @@index([tenantId, isActive])
+  @@index([bedId, isActive])
+}
+
+enum AllocationReason {
+  INITIAL  // First move-in
+  TRANSFER // Moved from a different bed
+}
+
+// KYC documents — one row per document submitted
+model TenantDocument {
+  id             String       @id @default(cuid())
+  tenantId       String
+  type           DocumentType
+  documentNumber String
+  fileUrl        String?
+  verifiedAt     DateTime?
+  verifiedBy     String?      // userId
+  createdAt      DateTime     @default(now())
+
+  tenant Tenant @relation(fields: [tenantId], references: [id])
+
+  @@index([tenantId])
+}
+
+model EmergencyContact {
+  id        String   @id @default(cuid())
+  tenantId  String
+  name      String
+  phone     String
+  relation  String
+  createdAt DateTime @default(now())
+
+  tenant Tenant @relation(fields: [tenantId], references: [id])
+
+  @@index([tenantId])
+}
+
+enum TenantStatus {
+  LEAD
+  VISIT_SCHEDULED
+  VISITED
+  ROOM_FINALIZED
+  DEPOSIT_PENDING
+  KYC_PENDING
+  ACTIVE
+  NOTICE_PERIOD
+  MOVED_OUT
+  REJECTED
+}
+
+enum KycStatus {
+  PENDING
+  SUBMITTED
+  VERIFIED
+  REJECTED
+}
+
+enum DepositStatus {
+  PENDING
+  PARTIALLY_PAID
+  PAID
+  REFUNDED
+  PARTIALLY_REFUNDED
+  FORFEITED
+}
+
+enum DocumentType {
+  AADHAAR
+  PAN
+  PASSPORT
+  DRIVING_LICENSE
+  VOTER_ID
+}
+
+// ─────────────────────────────────────────
+// FINANCIAL MODELS & SETTLEMENTS
+// ─────────────────────────────────────────
+
+// Defines how revenue is split between owner and operator.
+// A property has exactly ONE active model. Changing the model
+// creates a new record; the old one gets effectiveTo set.
+model FinancialModel {
+  id                   String             @id @default(cuid())
+  propertyId           String
+  type                 FinancialModelType
+  fixedOwnerPayout     Decimal?           @db.Decimal(10, 2) // FIXED_PAYOUT only
+  ownerSharePercent    Decimal?           @db.Decimal(5, 2)  // REVENUE_SHARE only
+  operatorSharePercent Decimal?           @db.Decimal(5, 2)  // REVENUE_SHARE only
+  isActive             Boolean            @default(true)
+  effectiveFrom        DateTime
+  effectiveTo          DateTime?
+  createdBy            String             // userId
+  createdAt            DateTime           @default(now())
+
+  property    Property     @relation(fields: [propertyId], references: [id])
+  settlements Settlement[]
+
+  @@index([propertyId, isActive])
+}
+
+model RentCycle {
+  id              String          @id @default(cuid())
+  tenantId        String
+  propertyId      String
+  month           Int
+  year            Int
+  dueDate         DateTime
+  rentAmount      Decimal         @db.Decimal(10, 2)
+  paidAmount      Decimal         @default(0) @db.Decimal(10, 2)
+  remainingAmount Decimal         @db.Decimal(10, 2) // rentAmount - paidAmount, never < 0
+  lateFee         Decimal         @default(0) @db.Decimal(10, 2)
+  status          RentCycleStatus @default(PENDING)
+  waivedBy        String?
+  waivedAt        DateTime?
+  waivedReason    String?
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+
+  tenant   Tenant    @relation(fields: [tenantId], references: [id])
+  property Property  @relation(fields: [propertyId], references: [id])
+  payments Payment[]
+
+  @@unique([tenantId, month, year])
+  @@index([propertyId, month, year])
+  @@index([tenantId, status])
+  @@index([dueDate])
+}
+
+model Payment {
+  id          String        @id @default(cuid())
+  tenantId    String
+  propertyId  String
+  rentCycleId String?       // null for deposit/misc payments
+  amount      Decimal       @db.Decimal(10, 2)
+  type        PaymentType
+  method      PaymentMethod
+  referenceNo String?       // UTR number, cheque number, etc.
+  notes       String?
+  recordedBy  String        // userId of operator who recorded it
+  paidAt      DateTime      // When money was actually received
+  createdAt   DateTime      @default(now())
+
+  tenant    Tenant     @relation(fields: [tenantId], references: [id])
+  property  Property   @relation(fields: [propertyId], references: [id])
+  rentCycle RentCycle? @relation(fields: [rentCycleId], references: [id])
+  recorder  User       @relation("PaymentRecordedBy", fields: [recordedBy], references: [id])
+  receipt   Receipt?
+
+  @@index([tenantId])
+  @@index([propertyId, paidAt])
+  @@index([rentCycleId])
+}
+
+// Immutable once created. Receipt number is the human-readable reference.
+model Receipt {
+  id        String   @id @default(cuid())
+  receiptNo String   @unique // RCP-YYYYMM-XXXXX
+  paymentId String   @unique
+  tenantId  String
+  issuedAt  DateTime @default(now())
+
+  payment Payment @relation(fields: [paymentId], references: [id])
+  tenant  Tenant  @relation(fields: [tenantId], references: [id])
+
+  @@index([tenantId])
+  @@index([receiptNo])
+}
+
+// Monthly owner-operator reconciliation
+model Settlement {
+  id               String           @id @default(cuid())
+  propertyId       String
+  financialModelId String
+  month            Int
+  year             Int
+  totalCollected   Decimal          @db.Decimal(10, 2)
+  ownerPayout      Decimal          @db.Decimal(10, 2)
+  operatorProfit   Decimal          @db.Decimal(10, 2)
+  breakdown        Json             // Full audit trail of calculation inputs
+  status           SettlementStatus @default(CALCULATED)
+  settledBy        String?          // userId who marked it paid
+  settledAt        DateTime?
+  notes            String?
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
+
+  property       Property       @relation(fields: [propertyId], references: [id])
+  financialModel FinancialModel @relation(fields: [financialModelId], references: [id])
+
+  @@unique([propertyId, month, year])
+  @@index([propertyId, status])
+}
+
+enum FinancialModelType {
+  FIXED_PAYOUT   // Operator pays owner a fixed amount; keeps the rest
+  REVENUE_SHARE  // Revenue split by percentages
+  OWNER_OPERATED // Owner runs it themselves — no split
+}
+
+enum RentCycleStatus {
+  PENDING  // Created, due date not yet reached
+  DUE      // Due date reached
+  PARTIAL  // Partially paid, within grace period
+  PAID     // Fully paid
+  OVERDUE  // Past grace period, not fully paid
+  WAIVED   // Written off
+}
+
+enum PaymentType {
+  RENT
+  DEPOSIT
+  DEPOSIT_REFUND
+  DEPOSIT_ADJUSTMENT // Security deposit applied to cover unpaid rent
+  FINE
+  MISCELLANEOUS
+}
+
+enum PaymentMethod {
+  CASH
+  UPI
+  BANK_TRANSFER
+  CHEQUE
+  CARD
+  ONLINE
+}
+
+enum SettlementStatus {
+  CALCULATED // Amounts computed, pending owner confirmation
+  PAID       // Owner confirmed receipt
+  DISPUTED   // Under review
+}
+
+// ─────────────────────────────────────────
+// COMPLAINTS
+// ─────────────────────────────────────────
+
+model Complaint {
+  id          String            @id @default(cuid())
+  propertyId  String
+  tenantId    String?
+  raisedBy    String
+  assignedTo  String?
+  category    ComplaintCategory
+  title       String
+  description String
+  priority    Priority          @default(MEDIUM)
+  status      ComplaintStatus   @default(OPEN)
+  resolvedAt  DateTime?
+  closedAt    DateTime?
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
+
+  property       Property         @relation(fields: [propertyId], references: [id])
+  tenant         Tenant?          @relation(fields: [tenantId], references: [id])
+  raisedByUser   User             @relation("ComplaintRaisedBy", fields: [raisedBy], references: [id])
+  assignedToUser User?            @relation("ComplaintAssignedTo", fields: [assignedTo], references: [id])
+  updates        ComplaintUpdate[]
+
+  @@index([propertyId, status])
+  @@index([tenantId])
+  @@index([assignedTo, status])
+}
+
+// Thread of updates on a complaint — status changes, comments, assignments
+model ComplaintUpdate {
+  id           String   @id @default(cuid())
+  complaintId  String
+  updatedBy    String
+  comment      String
+  statusChange String?  // Human-readable: "OPEN → ASSIGNED"
+  createdAt    DateTime @default(now())
+
+  complaint Complaint @relation(fields: [complaintId], references: [id])
+  user      User      @relation(fields: [updatedBy], references: [id])
+
+  @@index([complaintId])
+}
+
+enum ComplaintCategory {
+  MAINTENANCE
+  PLUMBING
+  ELECTRICAL
+  HOUSEKEEPING
+  SECURITY
+  FOOD
+  WIFI
+  NOISE
+  OTHER
+}
+
+enum ComplaintStatus {
+  OPEN
+  ASSIGNED
+  IN_PROGRESS
+  RESOLVED
+  CLOSED
+  REJECTED
+}
+
+enum Priority {
+  LOW
+  MEDIUM
+  HIGH
+  URGENT
+}
+
+// ─────────────────────────────────────────
+// AUDIT & NOTIFICATIONS
+// ─────────────────────────────────────────
+
+// Immutable audit trail — captures before/after state for all sensitive operations
+model AuditLog {
+  id         String   @id @default(cuid())
+  propertyId String?
+  userId     String?  // Who triggered the action
+  entity     String   // "Tenant" | "Payment" | "TenantAllocation" | etc.
+  entityId   String   // ID of the affected record
+  action     String   // "MOVE_IN" | "PAYMENT_RECORDED" | "STATUS_CHANGED" | etc.
+  before     Json?    // State before change
+  after      Json?    // State after change
+  metadata   Json?    // Additional context (IP, userAgent, etc.)
+  createdAt  DateTime @default(now())
+
+  property Property? @relation(fields: [propertyId], references: [id])
+  user     User?     @relation(fields: [userId], references: [id])
+
+  @@index([entityId, entity])
+  @@index([propertyId, createdAt])
+  @@index([userId, createdAt])
+}
+
+model Notification {
+  id         String           @id @default(cuid())
+  userId     String
+  propertyId String?
+  type       NotificationType
+  title      String
+  body       String
+  data       Json?
+  isRead     Boolean          @default(false)
+  readAt     DateTime?
+  createdAt  DateTime         @default(now())
+
+  user     User      @relation(fields: [userId], references: [id])
+  property Property? @relation(fields: [propertyId], references: [id])
+
+  @@index([userId, isRead])
+  @@index([userId, createdAt])
+}
+
+enum NotificationType {
+  RENT_DUE
+  RENT_OVERDUE
+  PAYMENT_RECEIVED
+  MOVE_IN_CONFIRMED
+  MOVE_OUT_INITIATED
+  COMPLAINT_ASSIGNED
+  COMPLAINT_RESOLVED
+  ANNOUNCEMENT
+  SYSTEM
+}

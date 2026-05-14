@@ -1,0 +1,14 @@
+{
+  "extends": "@pg-system/config/tsconfig/react-native",
+  "compilerOptions": {
+    "paths": {
+      "@/*": ["./src/*"],
+      "@pg-system/types": ["../../packages/types/src/index.ts"],
+      "@pg-system/constants": ["../../packages/constants/src/index.ts"],
+      "@pg-system/validations": ["../../packages/validations/src/index.ts"],
+      "@pg-system/utils": ["../../packages/utils/src/index.ts"]
+    }
+  },
+  "include": ["**/*.ts", "**/*.tsx"],
+  "exclude": ["node_modules"]
+}

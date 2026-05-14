@@ -1,0 +1,22 @@
+{
+  "name": "@pg-system/utils",
+  "version": "0.0.1",
+  "private": true,
+  "description": "Shared utility functions",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "type-check": "tsc --noEmit",
+    "clean": "rm -rf dist"
+  },
+  "dependencies": {
+    "date-fns": "^3.3.1"
+  },
+  "devDependencies": {
+    "@pg-system/config": "workspace:*",
+    "typescript": "^5.3.3"
+  }
+}

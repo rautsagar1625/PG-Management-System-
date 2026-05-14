@@ -1,0 +1,9 @@
+{
+  "extends": "@pg-system/config/tsconfig/base",
+  "compilerOptions": {
+    "module": "ESNext",
+    "outDir": "./dist",
+    "rootDir": "./src"
+  },
+  "include": ["src/**/*"]
+}
