@@ -1,9 +1,10 @@
-import { Controller, Get, UseGuards } from '@nestjs/common';
+import { Controller, Get, Param, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 
 import type { RequestContext } from '@pg-system/types';
 
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
+import { PropertyRoles } from '../../common/decorators/roles.decorator';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { DashboardService } from './dashboard.service';
 
@@ -24,5 +25,12 @@ export class DashboardController {
   @ApiOperation({ summary: 'Tenant dashboard — current rent & payments' })
   tenantDashboard(@CurrentUser() ctx: RequestContext) {
     return this.dashboardService.getTenantDashboard(ctx.userId);
+  }
+
+  @Get('property/:propertyId/performance')
+  @ApiOperation({ summary: 'Detailed operational performance for a single property' })
+  @PropertyRoles('OWNER', 'OPERATOR', 'CO_OPERATOR')
+  propertyPerformance(@Param('propertyId') propertyId: string) {
+    return this.dashboardService.getPropertyPerformance(propertyId);
   }
 }

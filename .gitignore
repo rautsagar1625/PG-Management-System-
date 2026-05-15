@@ -45,6 +45,21 @@ coverage
 # TypeScript
 *.tsbuildinfo
 
+# Compiled TypeScript artifacts in source directories (tsc without outDir creates these)
+apps/api/src/**/*.js
+apps/api/src/**/*.js.map
+apps/api/src/**/*.d.ts
+apps/api/src/**/*.d.ts.map
+packages/*/src/**/*.js
+packages/*/src/**/*.js.map
+packages/*/src/**/*.d.ts
+packages/*/src/**/*.d.ts.map
+
 # Misc
 .vercel
 .netlify
+
+# Playwright
+apps/web/e2e/.auth/
+apps/web/playwright-report/
+apps/web/test-results/

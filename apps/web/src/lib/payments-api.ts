@@ -1,9 +1,12 @@
 import { apiClient } from './api';
 
-export type RentCycleStatus = 'PENDING' | 'PARTIAL' | 'PAID' | 'OVERDUE' | 'WAIVED';
-export type PaymentMethod = 'CASH' | 'UPI' | 'BANK_TRANSFER' | 'CHEQUE' | 'DEPOSIT_ADJUSTMENT';
+export type RentCycleStatus = 'PENDING' | 'DUE' | 'PARTIAL' | 'PAID' | 'OVERDUE' | 'WAIVED';
+export type PaymentType = 'RENT' | 'DEPOSIT' | 'DEPOSIT_REFUND' | 'DEPOSIT_ADJUSTMENT' | 'FINE' | 'MISCELLANEOUS';
+export type PaymentMethod = 'CASH' | 'UPI' | 'BANK_TRANSFER' | 'CHEQUE' | 'CARD' | 'ONLINE';
 
-export interface RentCycle {
+// ── Core types ────────────────────────────────────────────────────────────────
+
+export interface CollectionCycle {
   id: string;
   tenantId: string;
   month: number;
@@ -16,10 +19,10 @@ export interface RentCycle {
   tenant: {
     id: string;
     tenantCode: string;
-    user: { name: string; phone: string | null };
+    user: { id: string; name: string; phone: string | null };
     allocations: {
       isActive: boolean;
-      bed: { label: string; room: { number: string } };
+      bed: { label: string; room: { number: string; floor: number | null } };
     }[];
   };
   payments: {
@@ -31,60 +34,140 @@ export interface RentCycle {
   }[];
 }
 
-export interface RecordPaymentDto {
-  tenantId: string;
-  rentCycleId: string;
-  amount: number;
-  method: PaymentMethod;
-  reference?: string;
-  paidAt?: string;
-  notes?: string;
-}
-
-export interface PaymentSummary {
+export interface CollectionSummary {
+  totalCycles: number;
   totalExpected: number;
   totalCollected: number;
-  totalPending: number;
-  overdueCount: number;
-  paidCount: number;
-  partialCount: number;
-  pendingCount: number;
+  totalRemaining: number;
+  statusBreakdown: Record<string, { count: number; remaining: number }>;
 }
 
-export async function getRentCycles(params: {
-  propertyId?: string;
-  tenantId?: string;
+export interface CollectionsResponse {
+  cycles: CollectionCycle[];
+  summary: CollectionSummary;
+  meta: { total: number; page: number; limit: number; totalPages: number };
+}
+
+export interface RecordPaymentDto {
+  tenantId: string;
+  rentCycleId?: string;
+  amount: number;
+  type: PaymentType;
+  method: PaymentMethod;
+  referenceNo?: string;
+  notes?: string;
+  paidAt: string;
+}
+
+export interface RecordPaymentResult {
+  payment: {
+    id: string;
+    amount: number;
+    type: PaymentType;
+    method: PaymentMethod;
+    paidAt: string;
+  };
+  receiptNo: string;
+}
+
+export interface ReceiptDetail {
+  receiptNo: string;
+  issuedAt: string;
+  tenantName: string;
+  tenantPhone: string | null;
+  tenantCode: string;
+  amount: number;
+  type: PaymentType;
+  method: PaymentMethod;
+  referenceNo: string | null;
+  notes: string | null;
+  paidAt: string;
+  recordedBy: string;
+  rentPeriod: { month: number; year: number } | null;
+  propertyName: string;
+  propertyAddress: string;
+  roomNumber: string;
+  bedLabel: string;
+}
+
+// ── Query functions ───────────────────────────────────────────────────────────
+
+export async function getCollections(params: {
+  propertyId: string;
+  month: number;
+  year: number;
   status?: string;
-  month?: number;
-  year?: number;
-}): Promise<{ cycles: RentCycle[]; summary: PaymentSummary }> {
-  const { data } = await apiClient.get<{
-    success: boolean;
-    data: { cycles: RentCycle[]; summary: PaymentSummary };
-  }>('/rent', { params });
+  search?: string;
+  page?: number;
+  limit?: number;
+}): Promise<CollectionsResponse> {
+  const { data } = await apiClient.get<{ success: boolean; data: CollectionsResponse }>(
+    '/rent/collections',
+    { params },
+  );
   return data.data;
 }
 
-export async function recordPayment(dto: RecordPaymentDto): Promise<RentCycle> {
-  const { data } = await apiClient.post<{ success: boolean; data: RentCycle }>(
+export async function getReceipt(receiptNo: string): Promise<ReceiptDetail> {
+  const { data } = await apiClient.get<{ success: boolean; data: ReceiptDetail }>(
+    `/rent/receipt/${receiptNo}`,
+  );
+  return data.data;
+}
+
+export async function getTenantRentCycles(
+  tenantId: string,
+  filters: { month?: number; year?: number; status?: string } = {},
+) {
+  const { data } = await apiClient.get<{ success: boolean; data: CollectionCycle[] }>(
+    `/rent/tenant/${tenantId}/cycles`,
+    { params: filters },
+  );
+  return data.data;
+}
+
+export async function getPropertySummary(propertyId: string, month: number, year: number) {
+  const { data } = await apiClient.get<{
+    success: boolean;
+    data: {
+      total: number;
+      paid: number;
+      partial: number;
+      pending: number;
+      overdue: number;
+      totalExpected: number;
+      totalCollected: number;
+      totalRemaining: number;
+    };
+  }>(`/rent/property/${propertyId}/summary`, { params: { month, year } });
+  return data.data;
+}
+
+// ── Mutation functions ────────────────────────────────────────────────────────
+
+export async function recordPayment(dto: RecordPaymentDto): Promise<RecordPaymentResult> {
+  const { data } = await apiClient.post<{ success: boolean; data: RecordPaymentResult }>(
     '/rent/payment',
     dto,
   );
   return data.data;
 }
 
-export async function generateCycles(propertyId: string): Promise<{ generated: number }> {
-  const { data } = await apiClient.post<{ success: boolean; data: { generated: number } }>(
-    '/rent/generate',
-    { propertyId },
-  );
+export async function generateCycles(
+  propertyId: string,
+  month: number,
+  year: number,
+): Promise<{ generated: number; total: number }> {
+  const { data } = await apiClient.post<{
+    success: boolean;
+    data: { generated: number; total: number };
+  }>('/rent/generate-cycles', { propertyId, month, year });
   return data.data;
 }
 
-export async function markOverdue(propertyId: string): Promise<{ marked: number }> {
-  const { data } = await apiClient.post<{ success: boolean; data: { marked: number } }>(
+export async function markOverdue(): Promise<{ markedOverdue: number }> {
+  const { data } = await apiClient.put<{ success: boolean; data: { markedOverdue: number } }>(
     '/rent/mark-overdue',
-    { propertyId },
   );
   return data.data;
 }

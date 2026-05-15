@@ -23,7 +23,7 @@ export class RoomsService {
       include: {
         beds: {
           include: {
-            assignments: {
+            allocations: {
               where: { isActive: true },
               include: { tenant: { include: { user: { select: { name: true, phone: true } } } } },
             },

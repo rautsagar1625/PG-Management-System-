@@ -19,6 +19,7 @@ import {
   getProperty,
   getOperatorDashboard,
 } from '@/lib/properties-api';
+import { getPropertyPerformance } from '@/lib/dashboard-api';
 import { getRooms, createRoom, type CreateRoomDto, ROOM_TYPE_LABELS } from '@/lib/rooms-api';
 import { getTenants } from '@/lib/tenants-api';
 import { PropertyStatusBadge, PropertyTypeBadge, RoomStatusBadge, TenantStatusBadge } from '@/components/ui/StatusBadge';
@@ -33,13 +34,14 @@ import { formatCurrency, formatDate } from '@/lib/utils';
 import type { Tenant } from '@/lib/tenants-api';
 import type { Room } from '@/lib/rooms-api';
 
-type Tab = 'overview' | 'rooms' | 'tenants' | 'financials';
+type Tab = 'overview' | 'rooms' | 'tenants' | 'financials' | 'performance';
 
 const TABS: { id: Tab; label: string }[] = [
   { id: 'overview', label: 'Overview' },
   { id: 'rooms', label: 'Rooms' },
   { id: 'tenants', label: 'Tenants' },
   { id: 'financials', label: 'Financials' },
+  { id: 'performance', label: 'Performance' },
 ];
 
 const ROOM_TYPES = [
@@ -163,6 +165,7 @@ export default function PropertyDetailPage() {
             <TenantsTab propertyId={id} onViewTenant={(tid) => router.push(`/dashboard/tenants/${tid}`)} />
           )}
           {activeTab === 'financials' && <FinancialsTab propertyId={id} stats={stats} />}
+          {activeTab === 'performance' && <PerformanceTab propertyId={id} />}
         </div>
       </div>
     </div>
@@ -614,6 +617,103 @@ function FinancialsTab({
       <p className="text-xs text-gray-400 text-center">
         Detailed payment history available in the Payments section.
       </p>
+    </div>
+  );
+}
+
+// ── Performance Tab ──────────────────────────────────────────────────
+
+function PerformanceTab({ propertyId }: { propertyId: string }) {
+  const { data: perf, isLoading } = useQuery({
+    queryKey: ['property-performance', propertyId],
+    queryFn: () => getPropertyPerformance(propertyId),
+  });
+
+  if (isLoading) return <PageLoader />;
+  if (!perf) return null;
+
+  const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+
+  return (
+    <div className="space-y-5">
+      <p className="text-xs text-gray-500">
+        {MONTHS[perf.month - 1]} {perf.year} — Current month operational snapshot
+      </p>
+
+      {/* Occupancy */}
+      <div className="grid sm:grid-cols-2 gap-4">
+        <div className="bg-gray-50 rounded-xl p-4">
+          <p className="text-xs font-semibold text-gray-500 uppercase mb-3">Occupancy</p>
+          <div className="flex items-end gap-2 mb-3">
+            <p className="text-3xl font-bold text-gray-900">{perf.occupancy.rate}%</p>
+            <p className="text-sm text-gray-400 mb-1">{perf.occupancy.occupied}/{perf.occupancy.total} beds</p>
+          </div>
+          <OccupancyBar occupied={perf.occupancy.occupied} total={perf.occupancy.total} showLabel showCounts />
+          <div className="flex gap-4 mt-3 text-xs text-gray-500">
+            <span>Occupied: <strong className="text-gray-800">{perf.occupancy.occupied}</strong></span>
+            <span>Vacant: <strong className="text-green-700">{perf.occupancy.vacant}</strong></span>
+          </div>
+        </div>
+
+        <div className="bg-gray-50 rounded-xl p-4">
+          <p className="text-xs font-semibold text-gray-500 uppercase mb-3">Collection</p>
+          <div className="flex items-end gap-2 mb-3">
+            <p className="text-3xl font-bold text-gray-900">{perf.collection.rate}%</p>
+            <p className="text-sm text-gray-400 mb-1">collected</p>
+          </div>
+          <div className="w-full bg-gray-200 rounded-full h-2 mb-3">
+            <div
+              className={`h-2 rounded-full ${perf.collection.rate >= 90 ? 'bg-green-500' : perf.collection.rate >= 70 ? 'bg-yellow-500' : 'bg-red-500'}`}
+              style={{ width: `${perf.collection.rate}%` }}
+            />
+          </div>
+          <div className="grid grid-cols-2 gap-2 text-xs text-gray-500">
+            <span>Expected: <strong className="text-gray-800">{formatCurrency(perf.collection.expected)}</strong></span>
+            <span>Collected: <strong className="text-green-700">{formatCurrency(perf.collection.collected)}</strong></span>
+            <span>Remaining: <strong className="text-yellow-700">{formatCurrency(perf.collection.remaining)}</strong></span>
+          </div>
+        </div>
+      </div>
+
+      {/* Key Metrics Row */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        <div className="bg-white border border-gray-200 rounded-xl p-4 text-center">
+          <p className="text-2xl font-bold text-gray-900">{perf.tenants.active}</p>
+          <p className="text-xs text-gray-500 mt-1">Active Tenants</p>
+        </div>
+        <div className="bg-white border border-gray-200 rounded-xl p-4 text-center">
+          <p className={`text-2xl font-bold ${perf.collection.overdueCycles > 0 ? 'text-red-600' : 'text-gray-900'}`}>
+            {perf.collection.overdueRate}%
+          </p>
+          <p className="text-xs text-gray-500 mt-1">Overdue Rate</p>
+          <p className="text-xs text-gray-400">{perf.collection.overdueCycles} of {perf.collection.totalCycles}</p>
+        </div>
+        <div className="bg-white border border-gray-200 rounded-xl p-4 text-center">
+          <p className={`text-2xl font-bold ${perf.complaints.open > 0 ? 'text-red-600' : 'text-gray-900'}`}>
+            {perf.complaints.open}
+          </p>
+          <p className="text-xs text-gray-500 mt-1">Open Complaints</p>
+        </div>
+        <div className="bg-white border border-gray-200 rounded-xl p-4 text-center">
+          <p className="text-2xl font-bold text-gray-900">{perf.occupancy.vacant}</p>
+          <p className="text-xs text-gray-500 mt-1">Vacant Beds</p>
+        </div>
+      </div>
+
+      {/* Complaint breakdown */}
+      {Object.keys(perf.complaints.byStatus).length > 0 && (
+        <div className="bg-gray-50 rounded-xl p-4">
+          <p className="text-xs font-semibold text-gray-500 uppercase mb-3">Complaints by Status</p>
+          <div className="flex flex-wrap gap-3">
+            {Object.entries(perf.complaints.byStatus).map(([status, count]) => (
+              <div key={status} className="text-sm">
+                <span className="text-gray-500">{status.replace('_', ' ')}: </span>
+                <span className="font-semibold text-gray-800">{count}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

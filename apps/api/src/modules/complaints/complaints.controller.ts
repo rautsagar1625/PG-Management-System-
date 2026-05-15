@@ -4,6 +4,7 @@ import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import type { RequestContext } from '@pg-system/types';
 
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
+import { PropertyRoles } from '../../common/decorators/roles.decorator';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { ComplaintsService, CreateComplaintDto, UpdateComplaintDto } from './complaints.service';
 
@@ -16,6 +17,7 @@ export class ComplaintsController {
 
   @Get()
   @ApiOperation({ summary: 'List complaints for a property' })
+  @PropertyRoles('OWNER', 'OPERATOR', 'CO_OPERATOR', 'STAFF')
   findAll(
     @Query('propertyId') propertyId: string,
     @Query() filters: { status?: string; category?: string },

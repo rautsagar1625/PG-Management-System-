@@ -15,11 +15,10 @@ export interface SetFinancialModelDto {
 export class FinancialService {
   constructor(private prisma: PrismaService) {}
 
-  async setFinancialModel(propertyId: string, dto: SetFinancialModelDto) {
+  async setFinancialModel(propertyId: string, dto: SetFinancialModelDto, createdBy: string) {
     this.validateModel(dto);
 
     return this.prisma.$transaction(async (tx) => {
-      // Deactivate previous model
       await tx.financialModel.updateMany({
         where: { propertyId, isActive: true },
         data: { isActive: false, effectiveTo: new Date(dto.effectiveFrom) },
@@ -34,6 +33,7 @@ export class FinancialService {
           operatorSharePercent: dto.operatorSharePercent ? new Prisma.Decimal(dto.operatorSharePercent) : null,
           effectiveFrom: new Date(dto.effectiveFrom),
           isActive: true,
+          createdBy,
         },
       });
 

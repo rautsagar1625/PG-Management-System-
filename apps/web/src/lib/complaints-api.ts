@@ -1,42 +1,45 @@
 import { apiClient } from './api';
 
-export type ComplaintStatus = 'OPEN' | 'IN_PROGRESS' | 'RESOLVED' | 'CLOSED';
+export type ComplaintStatus = 'OPEN' | 'ASSIGNED' | 'IN_PROGRESS' | 'RESOLVED' | 'CLOSED' | 'REJECTED';
 export type ComplaintCategory =
   | 'MAINTENANCE'
-  | 'CLEANLINESS'
-  | 'NOISE'
+  | 'PLUMBING'
+  | 'ELECTRICAL'
+  | 'HOUSEKEEPING'
   | 'SECURITY'
   | 'FOOD'
-  | 'BILLING'
-  | 'STAFF'
-  | 'FACILITIES'
+  | 'WIFI'
+  | 'NOISE'
   | 'OTHER';
 export type ComplaintPriority = 'LOW' | 'MEDIUM' | 'HIGH' | 'URGENT';
 
-export interface ComplaintComment {
+export interface ComplaintUpdate {
   id: string;
-  content: string;
+  comment: string;
+  statusChange: string | null;
   createdAt: string;
-  author: { id: string; name: string };
+  user: { id: string; name: string };
 }
 
 export interface Complaint {
   id: string;
   propertyId: string;
-  tenantId: string;
+  tenantId: string | null;
   title: string;
   description: string;
   category: ComplaintCategory;
   priority: ComplaintPriority;
   status: ComplaintStatus;
-  assignedToId: string | null;
+  assignedTo: string | null;
   resolvedAt: string | null;
+  closedAt: string | null;
   createdAt: string;
   updatedAt: string;
-  tenant: { id: string; tenantCode: string; user: { name: string; phone: string | null } };
-  assignedTo: { id: string; name: string } | null;
-  comments: ComplaintComment[];
-  _count: { comments: number };
+  tenant: { id: string; user: { name: string; phone?: string | null } } | null;
+  assignedToUser: { id: string; name: string } | null;
+  raisedByUser: { id: string; name: string };
+  updates: ComplaintUpdate[];
+  _count: { updates: number };
 }
 
 export interface CreateComplaintDto {
@@ -50,7 +53,7 @@ export interface CreateComplaintDto {
 
 export interface UpdateComplaintDto {
   status?: ComplaintStatus;
-  assignedToId?: string;
+  assignedTo?: string;
   priority?: ComplaintPriority;
   comment?: string;
 }

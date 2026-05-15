@@ -72,6 +72,81 @@ export class DashboardService {
     };
   }
 
+  async getPropertyPerformance(propertyId: string) {
+    const now = new Date();
+    const month = now.getMonth() + 1;
+    const year = now.getFullYear();
+
+    const [beds, activeTenants, rentSummary, complaints, overdueCount] = await Promise.all([
+      this.prisma.bed.groupBy({
+        by: ['status'],
+        where: { room: { propertyId } },
+        _count: { _all: true },
+      }),
+      this.prisma.tenant.count({
+        where: { propertyId, status: 'ACTIVE' },
+      }),
+      this.prisma.rentCycle.aggregate({
+        where: { propertyId, month, year },
+        _sum: { rentAmount: true, paidAmount: true, remainingAmount: true },
+      }),
+      this.prisma.complaint.groupBy({
+        by: ['status'],
+        where: { propertyId },
+        _count: { _all: true },
+      }),
+      this.prisma.rentCycle.count({
+        where: { propertyId, month, year, status: 'OVERDUE' },
+      }),
+    ]);
+
+    const totalBeds = beds.reduce((s, g) => s + g._count._all, 0);
+    const occupiedBeds = beds.find((g) => g.status === 'OCCUPIED')?._count._all ?? 0;
+    const vacantBeds = beds.find((g) => g.status === 'AVAILABLE')?._count._all ?? 0;
+    const totalExpected = Number(rentSummary._sum.rentAmount ?? 0);
+    const totalCollected = Number(rentSummary._sum.paidAmount ?? 0);
+    const totalCycles = await this.prisma.rentCycle.count({ where: { propertyId, month, year } });
+
+    const complaintsByStatus = Object.fromEntries(
+      complaints.map((c) => [c.status, c._count._all]),
+    );
+    const openComplaints = (complaintsByStatus['OPEN'] ?? 0) +
+      (complaintsByStatus['ASSIGNED'] ?? 0) +
+      (complaintsByStatus['IN_PROGRESS'] ?? 0);
+
+    return {
+      success: true,
+      data: {
+        month,
+        year,
+        occupancy: {
+          total: totalBeds,
+          occupied: occupiedBeds,
+          vacant: vacantBeds,
+          rate: calculateOccupancyRate(occupiedBeds, totalBeds),
+        },
+        collection: {
+          expected: totalExpected,
+          collected: totalCollected,
+          remaining: Number(rentSummary._sum.remainingAmount ?? 0),
+          rate: calculateCollectionRate(totalCollected, totalExpected),
+          totalCycles,
+          overdueCycles: overdueCount,
+          overdueRate: totalCycles > 0 ? Math.round((overdueCount / totalCycles) * 100) : 0,
+        },
+        tenants: {
+          active: activeTenants,
+        },
+        complaints: {
+          open: openComplaints,
+          resolved: complaintsByStatus['RESOLVED'] ?? 0,
+          closed: complaintsByStatus['CLOSED'] ?? 0,
+          byStatus: complaintsByStatus,
+        },
+      },
+    };
+  }
+
   async getTenantDashboard(userId: string) {
     const tenant = await this.prisma.tenant.findUnique({
       where: { userId },

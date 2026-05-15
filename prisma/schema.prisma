@@ -41,6 +41,7 @@ model User {
   complaintsAssigned Complaint[]      @relation("ComplaintAssignedTo")
   complaintUpdates   ComplaintUpdate[]
   paymentsRecorded   Payment[]        @relation("PaymentRecordedBy")
+  fileUploads        FileUpload[]
 
   @@index([email])
   @@index([phone])
@@ -632,4 +633,48 @@ enum NotificationType {
   COMPLAINT_RESOLVED
   ANNOUNCEMENT
   SYSTEM
+}
+
+// ─────────────────────────────────────────
+// FILE STORAGE
+// ─────────────────────────────────────────
+
+// Tracks every file uploaded through the platform.
+// Files are stored in S3/R2; this table holds metadata + access control.
+// Upload flow: request presigned URL → browser uploads directly → confirm upload.
+model FileUpload {
+  id         String         @id @default(cuid())
+  key        String         @unique // S3/R2 object key
+  bucket     String
+  fileName   String         // Sanitized original filename (no path, no special chars)
+  mimeType   String
+  sizeBytes  Int?           // Filled in on confirm
+  entityType FileEntityType
+  entityId   String         // ID of related entity (tenantId, complaintId, etc.)
+  uploadedBy String         // userId
+  status     FileStatus     @default(PENDING)
+  createdAt  DateTime       @default(now())
+  updatedAt  DateTime       @updatedAt
+
+  uploader User @relation(fields: [uploadedBy], references: [id])
+
+  @@index([entityType, entityId])
+  @@index([uploadedBy])
+  @@index([status, createdAt])
+}
+
+enum FileEntityType {
+  TENANT_KYC      // Aadhaar, PAN, passport
+  COMPLAINT_IMAGE // Photos attached to complaints
+  AGREEMENT       // Rental agreement documents
+  RECEIPT_PDF     // Generated receipt PDFs
+  TENANT_PHOTO    // Tenant profile photo
+  OTHER
+}
+
+enum FileStatus {
+  PENDING  // Presigned URL issued; file not yet uploaded
+  UPLOADED // Confirmed present in storage
+  FAILED   // Upload expired or failed
+  DELETED  // Soft-deleted; key retained for audit trail
 }

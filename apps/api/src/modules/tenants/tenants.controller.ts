@@ -4,6 +4,7 @@ import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import type { RequestContext } from '@pg-system/types';
 
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
+import { PropertyRoles } from '../../common/decorators/roles.decorator';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { TenantWorkflowService, MoveInDto, MoveOutDto, RoomTransferDto } from './tenant-workflow.service';
 import { TenantsService, CreateTenantDto } from './tenants.service';
@@ -20,6 +21,7 @@ export class TenantsController {
 
   @Get()
   @ApiOperation({ summary: 'List tenants with optional filters' })
+  @PropertyRoles('OWNER', 'OPERATOR', 'CO_OPERATOR', 'STAFF')
   findAll(
     @CurrentUser() ctx: RequestContext,
     @Query() query: { page?: number; limit?: number; search?: string; propertyId?: string; status?: string },
@@ -29,6 +31,7 @@ export class TenantsController {
 
   @Post()
   @ApiOperation({ summary: 'Add a new lead/tenant' })
+  @PropertyRoles('OWNER', 'OPERATOR', 'CO_OPERATOR')
   create(@Body() dto: CreateTenantDto) {
     return this.tenantsService.create(dto);
   }

@@ -1,3 +1,4 @@
+import * as Sentry from '@sentry/node';
 import {
   ArgumentsHost,
   Catch,
@@ -6,10 +7,13 @@ import {
   HttpStatus,
   Logger,
 } from '@nestjs/common';
-import { FastifyReply, FastifyRequest } from 'fastify';
 import { ZodError } from 'zod';
 
 import type { ApiResponse } from '@pg-system/types';
+
+// Minimal shape we actually use — avoids importing 'fastify' directly
+interface FReply { status(code: number): this; send(body: unknown): void }
+interface FRequest { method: string; url: string; id?: string; user?: { userId?: string } }
 
 @Catch()
 export class AllExceptionsFilter implements ExceptionFilter {
@@ -17,8 +21,8 @@ export class AllExceptionsFilter implements ExceptionFilter {
 
   catch(exception: unknown, host: ArgumentsHost) {
     const ctx = host.switchToHttp();
-    const reply = ctx.getResponse<FastifyReply>();
-    const request = ctx.getRequest<FastifyRequest>();
+    const reply = ctx.getResponse<FReply>();
+    const request = ctx.getRequest<FRequest>();
 
     let status = HttpStatus.INTERNAL_SERVER_ERROR;
     let code = 'INTERNAL_ERROR';
@@ -42,6 +46,17 @@ export class AllExceptionsFilter implements ExceptionFilter {
       details = { issues: exception.errors };
     } else if (exception instanceof Error) {
       this.logger.error(exception.message, exception.stack, `${request.method} ${request.url}`);
+
+      // Capture unhandled errors in Sentry with request context
+      Sentry.withScope((scope) => {
+        scope.setTag('requestId', request.id ?? 'unknown');
+        scope.setTag('method', request.method);
+        scope.setTag('url', request.url);
+        if (request.user?.userId) {
+          scope.setUser({ id: request.user.userId });
+        }
+        Sentry.captureException(exception);
+      });
     }
 
     const body: ApiResponse = {

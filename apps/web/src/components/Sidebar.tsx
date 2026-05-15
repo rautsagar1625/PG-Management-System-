@@ -10,6 +10,9 @@ import {
   IndianRupee,
   MessageSquare,
   LogOut,
+  AlertTriangle,
+  PiggyBank,
+  Shield,
 } from 'lucide-react';
 import { cn, getInitials } from '@/lib/utils';
 import { useAuth } from '@/providers/AuthProvider';
@@ -19,8 +22,11 @@ const NAV_ITEMS = [
   { href: '/dashboard/properties', label: 'Properties', icon: Building2, exact: false },
   { href: '/dashboard/tenants', label: 'Tenants', icon: Users, exact: false },
   { href: '/dashboard/rooms', label: 'Rooms', icon: BedDouble, exact: false },
-  { href: '/dashboard/payments', label: 'Payments', icon: IndianRupee, exact: false },
+  { href: '/dashboard/collections', label: 'Collections', icon: IndianRupee, exact: false },
+  { href: '/dashboard/overdue', label: 'Overdue', icon: AlertTriangle, exact: false },
+  { href: '/dashboard/settlements', label: 'Settlements', icon: PiggyBank, exact: false },
   { href: '/dashboard/complaints', label: 'Complaints', icon: MessageSquare, exact: false },
+  { href: '/dashboard/audit-logs', label: 'Audit Log', icon: Shield, exact: false },
 ];
 
 export function Sidebar() {

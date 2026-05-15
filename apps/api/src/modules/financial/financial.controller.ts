@@ -1,12 +1,17 @@
 import { Body, Controller, Get, Param, Post, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 
+import type { RequestContext } from '@pg-system/types';
+
+import { CurrentUser } from '../../common/decorators/current-user.decorator';
+import { PropertyRoles } from '../../common/decorators/roles.decorator';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { FinancialService, SetFinancialModelDto } from './financial.service';
 
 @ApiTags('Financial Models')
 @ApiBearerAuth()
 @UseGuards(JwtAuthGuard)
+@PropertyRoles('OWNER', 'OPERATOR', 'CO_OPERATOR')
 @Controller('properties/:propertyId/financial-model')
 export class FinancialController {
   constructor(private financialService: FinancialService) {}
@@ -24,8 +29,13 @@ export class FinancialController {
   }
 
   @Post()
-  @ApiOperation({ summary: 'Set/update financial model (deactivates previous)' })
-  set(@Param('propertyId') propertyId: string, @Body() dto: SetFinancialModelDto) {
-    return this.financialService.setFinancialModel(propertyId, dto);
+  @ApiOperation({ summary: 'Set/update financial model (deactivates previous) — OWNER only' })
+  @PropertyRoles('OWNER')
+  set(
+    @Param('propertyId') propertyId: string,
+    @Body() dto: SetFinancialModelDto,
+    @CurrentUser() ctx: RequestContext,
+  ) {
+    return this.financialService.setFinancialModel(propertyId, dto, ctx.userId);
   }
 }

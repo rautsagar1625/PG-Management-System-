@@ -1,5 +1,5 @@
 import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
-import { ComplaintStatus, Priority, Prisma } from '@prisma/client';
+import { ComplaintCategory, ComplaintStatus, Priority } from '@prisma/client';
 
 import { PrismaService } from '../../database/prisma.service';
 
@@ -37,13 +37,13 @@ export class ComplaintsService {
       where: {
         propertyId,
         ...(filters.status && { status: filters.status as ComplaintStatus }),
-        ...(filters.category && { category: filters.category as Prisma.EnumComplaintCategoryFilter }),
+        ...(filters.category && { category: filters.category as ComplaintCategory }),
       },
       include: {
-        creator: { select: { id: true, name: true } },
-        assignee: { select: { id: true, name: true } },
+        raisedByUser: { select: { id: true, name: true } },
+        assignedToUser: { select: { id: true, name: true } },
         tenant: { include: { user: { select: { name: true } } } },
-        _count: { select: { comments: true } },
+        _count: { select: { updates: true } },
       },
       orderBy: [{ priority: 'desc' }, { createdAt: 'desc' }],
     });
@@ -55,10 +55,10 @@ export class ComplaintsService {
     const complaint = await this.prisma.complaint.findUnique({
       where: { id },
       include: {
-        creator: { select: { id: true, name: true } },
-        assignee: { select: { id: true, name: true } },
+        raisedByUser: { select: { id: true, name: true } },
+        assignedToUser: { select: { id: true, name: true } },
         tenant: { include: { user: { select: { name: true, phone: true } } } },
-        comments: {
+        updates: {
           include: { user: { select: { id: true, name: true } } },
           orderBy: { createdAt: 'asc' },
         },
@@ -75,10 +75,10 @@ export class ComplaintsService {
         propertyId: dto.propertyId,
         tenantId: dto.tenantId,
         raisedBy,
-        category: dto.category as Prisma.EnumComplaintCategoryFilter,
+        category: dto.category as ComplaintCategory,
         title: dto.title,
         description: dto.description,
-        priority: dto.priority,
+        priority: dto.priority ?? 'MEDIUM',
       },
     });
     return { success: true, data: complaint };
@@ -110,9 +110,19 @@ export class ComplaintsService {
         },
       });
 
-      if (dto.comment) {
-        await tx.complaintComment.create({
-          data: { complaintId: id, userId: updatedBy, comment: dto.comment },
+      if (dto.comment || dto.status) {
+        const statusChange =
+          dto.status && dto.status !== complaint.status
+            ? `${complaint.status} → ${dto.status}`
+            : undefined;
+
+        await tx.complaintUpdate.create({
+          data: {
+            complaintId: id,
+            updatedBy,
+            comment: dto.comment ?? (statusChange ? `Status changed to ${dto.status}` : ''),
+            statusChange,
+          },
         });
       }
 

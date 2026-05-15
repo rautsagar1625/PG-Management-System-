@@ -1,5 +1,4 @@
 import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
-import { Prisma } from '@prisma/client';
 
 import type { PaginationQuery, RequestContext } from '@pg-system/types';
 import { buildPaginationMeta, buildPrismaSkipTake } from '@pg-system/utils';
@@ -15,15 +14,15 @@ export class PropertiesService {
     const { page = 1, limit = 20, search } = query;
     const { skip, take } = buildPrismaSkipTake(page, limit);
 
-    const where: Prisma.PropertyWhereInput = {
+    const where = {
       ...(search && {
         OR: [
-          { name: { contains: search, mode: 'insensitive' } },
-          { city: { contains: search, mode: 'insensitive' } },
+          { name: { contains: search, mode: 'insensitive' as const } },
+          { city: { contains: search, mode: 'insensitive' as const } },
         ],
       }),
       ...(ctx.systemRole !== 'SUPER_ADMIN' && {
-        roles: { some: { userId: ctx.userId, isActive: true } },
+        roles: { some: { userId: ctx.userId } },
       }),
     };
 
@@ -34,7 +33,7 @@ export class PropertiesService {
         take,
         orderBy: { createdAt: 'desc' },
         include: {
-          roles: { where: { isActive: true }, include: { user: { select: { id: true, name: true } } } },
+          roles: { include: { user: { select: { id: true, name: true } } } },
           _count: { select: { rooms: true, tenants: { where: { status: 'ACTIVE' } } } },
         },
       }),
@@ -53,7 +52,6 @@ export class PropertiesService {
       where: { id },
       include: {
         roles: {
-          where: { isActive: true },
           include: { user: { select: { id: true, name: true, email: true, phone: true } } },
         },
         financialModels: { where: { isActive: true }, orderBy: { effectiveFrom: 'desc' } },
@@ -78,8 +76,7 @@ export class PropertiesService {
       const prop = await tx.property.create({
         data: {
           name: dto.name,
-          addrLine1: dto.address.line1,
-          addrLine2: dto.address.line2,
+          address: [dto.address.line1, dto.address.line2].filter(Boolean).join(', '),
           city: dto.address.city,
           state: dto.address.state,
           pincode: dto.address.pincode,
@@ -91,7 +88,7 @@ export class PropertiesService {
 
       // Auto-assign creator as OPERATOR
       await tx.propertyRole.create({
-        data: { propertyId: prop.id, userId: ctx.userId, role: 'OPERATOR' },
+        data: { propertyId: prop.id, userId: ctx.userId, role: 'OPERATOR', addedBy: ctx.userId },
       });
 
       return prop;
@@ -108,8 +105,7 @@ export class PropertiesService {
       data: {
         ...(dto.name && { name: dto.name }),
         ...(dto.address && {
-          addrLine1: dto.address.line1,
-          addrLine2: dto.address.line2,
+          address: [dto.address.line1, dto.address.line2].filter(Boolean).join(', '),
           city: dto.address.city,
           state: dto.address.state,
           pincode: dto.address.pincode,
@@ -139,7 +135,6 @@ export class PropertiesService {
         propertyId,
         userId: ctx.userId,
         role: { in: ['OWNER', 'OPERATOR', 'CO_OPERATOR'] },
-        isActive: true,
       },
     });
     if (!role) throw new ForbiddenException('Insufficient property role');

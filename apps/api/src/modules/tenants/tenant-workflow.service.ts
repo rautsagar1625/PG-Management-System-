@@ -192,7 +192,17 @@ export class TenantWorkflowService {
       );
     }
 
-    return this.prisma.$transaction(async (tx) => {
+    // Collect pending dues summary — move-out is allowed but caller is informed
+    const pendingDues = await this.prisma.rentCycle.aggregate({
+      where: {
+        tenantId,
+        status: { in: ['PENDING', 'OVERDUE', 'PARTIAL'] },
+      },
+      _sum: { remainingAmount: true },
+      _count: { _all: true },
+    });
+
+    const result = await this.prisma.$transaction(async (tx) => {
       await this.allocation.closeAllocation(
         tx,
         tenantId,
@@ -224,6 +234,14 @@ export class TenantWorkflowService {
         },
       });
     });
+
+    return {
+      tenant: result,
+      pendingDuesSummary: {
+        totalUnpaidCycles: pendingDues._count._all,
+        totalRemainingAmount: Number(pendingDues._sum.remainingAmount ?? 0),
+      },
+    };
   }
 
   async roomTransfer(tenantId: string, dto: RoomTransferDto) {
@@ -232,6 +250,16 @@ export class TenantWorkflowService {
     if (tenant.status !== TenantStatus.ACTIVE) {
       throw new BadRequestException(
         'Room transfer only allowed for active tenants',
+      );
+    }
+
+    // Guard: block transfer if tenant has unresolved overdue cycles
+    const overdueCount = await this.prisma.rentCycle.count({
+      where: { tenantId, status: 'OVERDUE' },
+    });
+    if (overdueCount > 0) {
+      throw new ConflictException(
+        `Cannot transfer: tenant has ${overdueCount} overdue rent cycle(s). Resolve dues before transferring.`,
       );
     }
 
@@ -254,6 +282,15 @@ export class TenantWorkflowService {
     }
 
     return this.prisma.$transaction(async (tx) => {
+      // Re-check availability inside transaction to prevent race conditions
+      const bedInTx = await tx.bed.findUnique({
+        where: { id: dto.newBedId },
+        select: { status: true },
+      });
+      if (bedInTx?.status !== BedStatus.AVAILABLE) {
+        throw new ConflictException('Target bed was taken by a concurrent request');
+      }
+
       await this.allocation.executeTransfer(
         tx,
         tenantId,

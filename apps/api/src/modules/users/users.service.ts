@@ -18,7 +18,6 @@ export class UsersService {
         isVerified: true,
         createdAt: true,
         propertyRoles: {
-          where: { isActive: true },
           include: { property: { select: { id: true, name: true, city: true } } },
         },
       },

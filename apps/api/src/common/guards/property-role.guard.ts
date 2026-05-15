@@ -45,7 +45,6 @@ export class PropertyRoleGuard implements CanActivate {
         propertyId,
         userId: user.userId,
         role: { in: requiredRoles },
-        isActive: true,
       },
     });
 

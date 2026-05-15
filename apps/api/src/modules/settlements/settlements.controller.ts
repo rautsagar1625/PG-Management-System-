@@ -4,6 +4,7 @@ import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import type { RequestContext } from '@pg-system/types';
 
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
+import { PropertyRoles } from '../../common/decorators/roles.decorator';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { SettlementsService } from './settlements.service';
 
@@ -16,6 +17,7 @@ export class SettlementsController {
 
   @Post('calculate')
   @ApiOperation({ summary: 'Calculate owner-operator settlement for a month' })
+  @PropertyRoles('OWNER', 'OPERATOR')
   calculate(
     @Body() body: { propertyId: string; month: number; year: number },
     @CurrentUser() ctx: RequestContext,
@@ -40,6 +42,7 @@ export class SettlementsController {
 
   @Get('property/:propertyId')
   @ApiOperation({ summary: 'Get all settlements for a property' })
+  @PropertyRoles('OWNER', 'OPERATOR')
   getSettlements(
     @Param('propertyId') propertyId: string,
     @Query('year') year?: number,

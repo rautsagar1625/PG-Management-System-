@@ -1,43 +1,69 @@
 import { apiClient } from './api';
 
-export interface DashboardStats {
-  totalRooms: number;
+export interface PropertyCard {
+  propertyId: string;
+  propertyName: string;
+  city: string;
+  occupancyRate: number;
   totalBeds: number;
   occupiedBeds: number;
   availableBeds: number;
-  occupancyRate: number;
-  activeTenants: number;
-  leads: number;
+  rentCollectionRate: number;
+  totalExpectedRent: number;
+  totalCollectedRent: number;
   pendingRent: number;
-  collectedThisMonth: number;
-  overdueCount: number;
   openComplaints: number;
 }
 
-export interface RecentActivity {
-  id: string;
-  type: 'payment' | 'move_in' | 'move_out' | 'complaint' | 'notice';
-  description: string;
-  tenantName: string;
-  createdAt: string;
+export interface GlobalSummary {
+  totalProperties: number;
+  totalMonthlyRevenue: number;
+  totalPendingRent: number;
+  totalOpenComplaints: number;
 }
 
-export async function getDashboardStats(propertyId: string): Promise<DashboardStats> {
-  const { data } = await apiClient.get<{ success: boolean; data: DashboardStats }>(
-    `/dashboard/${propertyId}`,
+export interface OperatorDashboard {
+  properties: PropertyCard[];
+  globalSummary: GlobalSummary;
+}
+
+export async function getOperatorDashboard(): Promise<OperatorDashboard> {
+  const { data } = await apiClient.get<{ success: boolean; data: OperatorDashboard }>(
+    '/dashboard/operator',
   );
   return data.data;
 }
 
-export interface Property {
-  id: string;
-  name: string;
-  address: string;
-  city: string;
-  totalRooms: number;
+export interface PropertyPerformance {
+  month: number;
+  year: number;
+  occupancy: {
+    total: number;
+    occupied: number;
+    vacant: number;
+    rate: number;
+  };
+  collection: {
+    expected: number;
+    collected: number;
+    remaining: number;
+    rate: number;
+    totalCycles: number;
+    overdueCycles: number;
+    overdueRate: number;
+  };
+  tenants: { active: number };
+  complaints: {
+    open: number;
+    resolved: number;
+    closed: number;
+    byStatus: Record<string, number>;
+  };
 }
 
-export async function getProperties(): Promise<Property[]> {
-  const { data } = await apiClient.get<{ success: boolean; data: Property[] }>('/properties');
+export async function getPropertyPerformance(propertyId: string): Promise<PropertyPerformance> {
+  const { data } = await apiClient.get<{ success: boolean; data: PropertyPerformance }>(
+    `/dashboard/property/${propertyId}/performance`,
+  );
   return data.data;
 }
