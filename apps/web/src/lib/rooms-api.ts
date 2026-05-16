@@ -88,36 +88,17 @@ export const ROOM_TYPE_CAPACITY: Record<RoomType, number> = {
 
 export async function getRooms(propertyId: string): Promise<Room[]> {
   const { data } = await apiClient.get<{ success: boolean; data: Room[] }>(
-    '/rooms',
-    { params: { propertyId } },
+    `/properties/${propertyId}/rooms`,
   );
-  return data.data;
-}
-
-export async function getRoom(id: string): Promise<Room> {
-  const { data } = await apiClient.get<{ success: boolean; data: Room }>(`/rooms/${id}`);
   return data.data;
 }
 
 // ── Mutations ────────────────────────────────────────────────────────
 
 export async function createRoom(dto: CreateRoomDto): Promise<Room> {
-  const { data } = await apiClient.post<{ success: boolean; data: Room }>('/rooms', dto);
-  return data.data;
-}
-
-export async function updateRoom(id: string, dto: Partial<CreateRoomDto>): Promise<Room> {
-  const { data } = await apiClient.put<{ success: boolean; data: Room }>(`/rooms/${id}`, dto);
-  return data.data;
-}
-
-export async function updateBedStatus(
-  bedId: string,
-  status: BedStatus,
-): Promise<Bed> {
-  const { data } = await apiClient.put<{ success: boolean; data: Bed }>(
-    `/beds/${bedId}/status`,
-    { status },
+  const { data } = await apiClient.post<{ success: boolean; data: Room }>(
+    `/properties/${dto.propertyId}/rooms`,
+    dto,
   );
   return data.data;
 }

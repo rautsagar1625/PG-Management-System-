@@ -126,7 +126,7 @@ export async function updateProperty(
   id: string,
   dto: Partial<CreatePropertyDto & { status: PropertyStatus }>,
 ): Promise<Property> {
-  const { data } = await apiClient.put<{ success: boolean; data: Property }>(
+  const { data } = await apiClient.patch<{ success: boolean; data: Property }>(
     `/properties/${id}`,
     dto,
   );
