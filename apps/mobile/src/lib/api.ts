@@ -24,8 +24,12 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
   const json = await res.json();
 
   if (!res.ok) {
-    const message = json?.message ?? json?.error ?? `Request failed: ${res.status}`;
-    throw new Error(typeof message === 'string' ? message : JSON.stringify(message));
+    const message =
+      json?.error?.message ??
+      json?.message ??
+      (typeof json?.error === 'string' ? json.error : null) ??
+      `Request failed: ${res.status}`;
+    throw new Error(message);
   }
 
   return json;
