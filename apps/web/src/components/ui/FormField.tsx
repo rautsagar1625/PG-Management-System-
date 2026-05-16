@@ -1,3 +1,4 @@
+import React from 'react';
 import { cn } from '@/lib/utils';
 
 interface FormFieldProps {
@@ -34,9 +35,10 @@ interface InputProps extends React.InputHTMLAttributes<HTMLInputElement> {
   error?: boolean;
 }
 
-export function Input({ error, className, ...props }: InputProps) {
-  return (
+export const Input = React.forwardRef<HTMLInputElement, InputProps>(
+  ({ error, className, ...props }, ref) => (
     <input
+      ref={ref}
       className={cn(
         'input-field',
         error && 'border-red-400 focus:ring-red-400',
@@ -44,8 +46,9 @@ export function Input({ error, className, ...props }: InputProps) {
       )}
       {...props}
     />
-  );
-}
+  ),
+);
+Input.displayName = 'Input';
 
 interface SelectFieldProps extends React.SelectHTMLAttributes<HTMLSelectElement> {
   error?: boolean;
@@ -53,15 +56,10 @@ interface SelectFieldProps extends React.SelectHTMLAttributes<HTMLSelectElement>
   placeholder?: string;
 }
 
-export function SelectField({
-  error,
-  className,
-  options,
-  placeholder,
-  ...props
-}: SelectFieldProps) {
-  return (
+export const SelectField = React.forwardRef<HTMLSelectElement, SelectFieldProps>(
+  ({ error, className, options, placeholder, ...props }, ref) => (
     <select
+      ref={ref}
       className={cn(
         'input-field bg-white',
         error && 'border-red-400 focus:ring-red-400',
@@ -80,16 +78,18 @@ export function SelectField({
         </option>
       ))}
     </select>
-  );
-}
+  ),
+);
+SelectField.displayName = 'SelectField';
 
 interface TextareaProps extends React.TextareaHTMLAttributes<HTMLTextAreaElement> {
   error?: boolean;
 }
 
-export function Textarea({ error, className, ...props }: TextareaProps) {
-  return (
+export const Textarea = React.forwardRef<HTMLTextAreaElement, TextareaProps>(
+  ({ error, className, ...props }, ref) => (
     <textarea
+      ref={ref}
       rows={3}
       className={cn(
         'input-field resize-none',
@@ -98,5 +98,6 @@ export function Textarea({ error, className, ...props }: TextareaProps) {
       )}
       {...props}
     />
-  );
-}
+  ),
+);
+Textarea.displayName = 'Textarea';
