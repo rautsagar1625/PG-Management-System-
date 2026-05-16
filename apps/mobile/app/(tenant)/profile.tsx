@@ -56,11 +56,6 @@ export default function ProfileScreen() {
 
   return (
     <View style={styles.container}>
-      <View style={styles.header}>
-        <Text style={styles.title}>Profile</Text>
-        <Text style={styles.subtitle}>Your stay details</Text>
-      </View>
-
       {loading && !profile && (
         <View style={styles.center}>
           <ActivityIndicator color="#4f46e5" />
@@ -134,14 +129,6 @@ export default function ProfileScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#f3f4f6' },
-  header: {
-    backgroundColor: '#4f46e5',
-    paddingTop: 56,
-    paddingBottom: 20,
-    paddingHorizontal: 20,
-  },
-  title: { fontSize: 24, fontWeight: '700', color: '#fff' },
-  subtitle: { fontSize: 13, color: '#c7d2fe', marginTop: 2 },
   center: { paddingVertical: 40, alignItems: 'center' },
   errorBox: { margin: 16, backgroundColor: '#fef2f2', borderRadius: 12, padding: 16, alignItems: 'center' },
   errorText: { color: '#dc2626', fontSize: 14, textAlign: 'center' },

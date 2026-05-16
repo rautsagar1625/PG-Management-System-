@@ -35,7 +35,7 @@ export default function HomeScreen() {
       contentContainerStyle={styles.content}
       refreshControl={<RefreshControl refreshing={loading && !!data} onRefresh={refetch} />}
     >
-      {/* Header */}
+      {/* Greeting */}
       <View style={styles.header}>
         <View>
           <Text style={styles.greeting}>Hello, {user?.name?.split(' ')[0]} 👋</Text>
@@ -150,7 +150,7 @@ const styles = StyleSheet.create({
   content: { paddingBottom: 24 },
   header: {
     backgroundColor: '#4f46e5',
-    paddingTop: 56,
+    paddingTop: 16,
     paddingBottom: 20,
     paddingHorizontal: 20,
     flexDirection: 'row',
