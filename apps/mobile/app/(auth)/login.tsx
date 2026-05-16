@@ -11,8 +11,9 @@ import {
   Alert,
 } from 'react-native';
 import { useRouter } from 'expo-router';
-import { login } from '../../src/lib/auth';
+import { login, logout } from '../../src/lib/auth';
 import { useAuth } from '../../src/context/AuthContext';
+import { getTenantDashboard } from '../../src/lib/tenant-api';
 
 export default function LoginScreen() {
   const router = useRouter();
@@ -27,6 +28,17 @@ export default function LoginScreen() {
     setLoading(true);
     try {
       const result = await login(email.trim(), password);
+      // Verify this account has a tenant record before proceeding
+      try {
+        await getTenantDashboard();
+      } catch {
+        await logout();
+        Alert.alert(
+          'Not a Tenant Account',
+          'This app is for tenants only. Use the web dashboard for operator or owner access.',
+        );
+        return;
+      }
       setUser(result.user);
       router.replace('/(tenant)/');
     } catch (err) {
