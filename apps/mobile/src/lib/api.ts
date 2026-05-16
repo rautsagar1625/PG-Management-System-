@@ -1,6 +1,9 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL ?? 'http://localhost:3000';
+// Use __DEV__ to avoid babel-preset-expo's virtual module injection from process.env.EXPO_PUBLIC_*
+const API_BASE_URL = __DEV__
+  ? 'http://localhost:3001/api/v1'
+  : 'https://api.pgmanager.app/api/v1';
 
 async function getAuthHeader(): Promise<Record<string, string>> {
   const token = await AsyncStorage.getItem('access_token');

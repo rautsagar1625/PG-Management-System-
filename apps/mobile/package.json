@@ -5,28 +5,32 @@
   "description": "PG Management System - Expo React Native Mobile App",
   "main": "expo-router/entry",
   "scripts": {
-    "start": "expo start",
-    "android": "expo start --android",
-    "ios": "expo start --ios",
+    "start": "expo start --port 8082",
+    "android": "expo start --android --port 8082",
+    "ios": "expo start --ios --port 8082",
     "type-check": "tsc --noEmit",
     "lint": "eslint src --ext .ts,.tsx",
     "clean": "rm -rf .expo"
   },
   "dependencies": {
+    "@babel/runtime": "^7.29.2",
     "@pg-system/constants": "workspace:*",
     "@pg-system/types": "workspace:*",
     "@pg-system/utils": "workspace:*",
     "@pg-system/validations": "workspace:*",
-    "@react-native-async-storage/async-storage": "^2.1.2",
+    "@react-native-async-storage/async-storage": "1.23.1",
     "expo": "~52.0.0",
     "expo-router": "~4.0.0",
     "expo-status-bar": "~2.0.0",
     "react": "18.3.1",
-    "react-native": "0.76.5"
+    "react-native": "0.76.9",
+    "react-native-screens": "~4.4.0",
+    "react-native-safe-area-context": "4.12.0"
   },
   "devDependencies": {
     "@pg-system/config": "workspace:*",
     "@types/react": "~18.3.0",
+    "babel-preset-expo": "~12.0.0",
     "typescript": "^5.3.3"
   }
 }
