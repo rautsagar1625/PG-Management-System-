@@ -16,11 +16,12 @@ export interface LoginResult {
 }
 
 export async function login(email: string, password: string): Promise<LoginResult> {
-  const res = await api.post<{ success: boolean; data: LoginResult }>('/auth/login', {
-    email,
-    password,
-  });
-  const { accessToken, refreshToken, user } = res.data;
+  const res = await api.post<{
+    success: boolean;
+    data: { user: AuthUser; tokens: { accessToken: string; refreshToken: string } };
+  }>('/auth/login', { email, password });
+  const { user, tokens } = res.data;
+  const { accessToken, refreshToken } = tokens;
   await AsyncStorage.setItem('access_token', accessToken);
   await AsyncStorage.setItem('refresh_token', refreshToken);
   await AsyncStorage.setItem('user', JSON.stringify(user));
