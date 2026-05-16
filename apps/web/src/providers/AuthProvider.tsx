@@ -9,7 +9,8 @@ interface User {
   id: string;
   name: string;
   email: string;
-  phone: string;
+  phone?: string;
+  systemRole: string;
 }
 
 interface AuthContextValue {
@@ -48,14 +49,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [loadUser]);
 
   const signIn = async (dto: LoginDto) => {
-    const { user: authUser, accessToken, refreshToken } = await login(dto);
-    setTokens(accessToken, refreshToken);
+    const { user: authUser, tokens } = await login(dto);
+    setTokens(tokens.accessToken, tokens.refreshToken);
     setUser(authUser);
   };
 
   const signUp = async (dto: RegisterDto) => {
-    const { user: authUser, accessToken, refreshToken } = await register(dto);
-    setTokens(accessToken, refreshToken);
+    const { user: authUser, tokens } = await register(dto);
+    setTokens(tokens.accessToken, tokens.refreshToken);
     setUser(authUser);
   };
 

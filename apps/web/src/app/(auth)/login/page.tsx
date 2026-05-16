@@ -35,7 +35,7 @@ export default function LoginPage() {
       await signIn(data);
       router.push('/dashboard');
     } catch (err: any) {
-      setApiError(err?.response?.data?.message || 'Invalid credentials. Please try again.');
+      setApiError(err?.response?.data?.error?.message || err?.response?.data?.message || 'Invalid credentials. Please try again.');
     }
   };
 

@@ -12,15 +12,21 @@ export interface RegisterDto {
   password: string;
 }
 
+export interface AuthUser {
+  id: string;
+  name: string;
+  email: string;
+  phone?: string;
+  systemRole: string;
+}
+
 export interface AuthResponse {
-  user: {
-    id: string;
-    name: string;
-    email: string;
-    phone: string;
+  user: AuthUser;
+  tokens: {
+    accessToken: string;
+    refreshToken: string;
+    expiresIn: number;
   };
-  accessToken: string;
-  refreshToken: string;
 }
 
 export async function login(dto: LoginDto): Promise<AuthResponse> {
@@ -37,7 +43,7 @@ export async function logout(refreshToken: string): Promise<void> {
   await apiClient.post('/auth/logout', { refreshToken });
 }
 
-export async function getCurrentUser() {
-  const { data } = await apiClient.get<{ success: boolean; data: AuthResponse['user'] }>('/auth/me');
+export async function getCurrentUser(): Promise<AuthUser> {
+  const { data } = await apiClient.get<{ success: boolean; data: AuthUser }>('/users/me');
   return data.data;
 }
