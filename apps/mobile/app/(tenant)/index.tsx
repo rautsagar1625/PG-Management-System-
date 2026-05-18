@@ -10,7 +10,7 @@ import {
 import { useAuth } from '../../src/context/AuthContext';
 import { getTenantDashboard } from '../../src/lib/tenant-api';
 import { useAsync } from '../../src/lib/hooks';
-import { formatCurrency, formatMonth, formatDate } from '../../src/lib/format';
+import { formatCurrency, formatDate } from '../../src/lib/format';
 
 const STATUS_COLORS: Record<string, string> = {
   PENDING: '#f59e0b',
@@ -35,12 +35,12 @@ export default function HomeScreen() {
       contentContainerStyle={styles.content}
       refreshControl={<RefreshControl refreshing={loading && !!data} onRefresh={refetch} />}
     >
-      {/* Greeting */}
-      <View style={styles.header}>
-        <View>
-          <Text style={styles.greeting}>Hello, {user?.name?.split(' ')[0]} 👋</Text>
+      {/* Greeting strip */}
+      <View style={styles.greetingStrip}>
+        <View style={styles.greetingLeft}>
+          <Text style={styles.greetingName}>Hello, {user?.name?.split(' ')[0]} 👋</Text>
           {dashboard?.tenant.tenantCode && (
-            <Text style={styles.subtext}>{dashboard.tenant.tenantCode}</Text>
+            <Text style={styles.greetingCode}>{dashboard.tenant.tenantCode}</Text>
           )}
         </View>
         {allocation && (
@@ -68,7 +68,7 @@ export default function HomeScreen() {
       )}
 
       {dashboard && (
-        <>
+        <View style={styles.cards}>
           {/* Room Card */}
           {allocation ? (
             <View style={styles.roomCard}>
@@ -81,8 +81,8 @@ export default function HomeScreen() {
               <Text style={styles.roomSub}>Stay started {formatDate(allocation.startDate)}</Text>
             </View>
           ) : (
-            <View style={styles.noRoom}>
-              <Text style={styles.noRoomText}>No active room allocation</Text>
+            <View style={styles.emptyCard}>
+              <Text style={styles.emptyText}>No active room allocation</Text>
             </View>
           )}
 
@@ -113,7 +113,6 @@ export default function HomeScreen() {
                 </View>
               </View>
 
-              {/* Progress bar */}
               <View style={styles.progressBg}>
                 <View
                   style={[
@@ -128,8 +127,8 @@ export default function HomeScreen() {
               <Text style={styles.dueDateText}>Due by {formatDate(cycle.dueDate)}</Text>
             </View>
           ) : (
-            <View style={styles.noRentCard}>
-              <Text style={styles.noRoomText}>No rent cycle for this month yet</Text>
+            <View style={styles.emptyCard}>
+              <Text style={styles.emptyText}>No rent cycle for this month yet</Text>
             </View>
           )}
 
@@ -139,7 +138,7 @@ export default function HomeScreen() {
             <Text style={styles.depositAmount}>{formatCurrency(dashboard.tenant.depositBalance)}</Text>
             <Text style={styles.depositSub}>Held on your behalf</Text>
           </View>
-        </>
+        </View>
       )}
     </ScrollView>
   );
@@ -148,35 +147,40 @@ export default function HomeScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#f3f4f6' },
   content: { paddingBottom: 24 },
-  header: {
-    backgroundColor: '#4f46e5',
-    paddingTop: 16,
-    paddingBottom: 20,
-    paddingHorizontal: 20,
+
+  greetingStrip: {
+    backgroundColor: '#fff',
+    paddingVertical: 14,
+    paddingHorizontal: 16,
     flexDirection: 'row',
-    alignItems: 'flex-start',
+    alignItems: 'center',
     justifyContent: 'space-between',
+    borderBottomWidth: 1,
+    borderBottomColor: '#e5e7eb',
   },
-  greeting: { fontSize: 22, fontWeight: '700', color: '#fff' },
-  subtext: { fontSize: 12, color: '#c7d2fe', marginTop: 2 },
+  greetingLeft: { flex: 1, marginRight: 10 },
+  greetingName: { fontSize: 17, fontWeight: '700', color: '#111827' },
+  greetingCode: { fontSize: 12, color: '#9ca3af', marginTop: 2 },
   propertyBadge: {
-    backgroundColor: 'rgba(255,255,255,0.15)',
+    backgroundColor: '#eef2ff',
     borderRadius: 8,
     paddingHorizontal: 10,
     paddingVertical: 4,
     maxWidth: 140,
   },
-  propertyName: { fontSize: 12, color: '#e0e7ff', fontWeight: '600' },
-  center: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingVertical: 40 },
+  propertyName: { fontSize: 12, color: '#4f46e5', fontWeight: '600' },
+
+  center: { paddingVertical: 40, alignItems: 'center' },
   errorBox: { margin: 16, backgroundColor: '#fef2f2', borderRadius: 12, padding: 16, alignItems: 'center' },
   errorText: { color: '#dc2626', fontSize: 14, textAlign: 'center' },
   retryBtn: { marginTop: 10, paddingHorizontal: 20, paddingVertical: 8, backgroundColor: '#dc2626', borderRadius: 8 },
   retryText: { color: '#fff', fontWeight: '600', fontSize: 13 },
+
+  cards: { padding: 16, gap: 12 },
+
   roomCard: {
-    margin: 16,
-    marginBottom: 0,
     backgroundColor: '#fff',
-    borderRadius: 16,
+    borderRadius: 14,
     padding: 16,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 1 },
@@ -184,23 +188,20 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
     elevation: 2,
   },
-  noRoom: {
-    margin: 16,
-    marginBottom: 0,
+  emptyCard: {
     backgroundColor: '#fff',
-    borderRadius: 16,
+    borderRadius: 14,
     padding: 20,
     alignItems: 'center',
   },
-  noRoomText: { color: '#9ca3af', fontSize: 14 },
-  cardLabel: { fontSize: 11, fontWeight: '600', color: '#6b7280', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 6 },
+  emptyText: { color: '#9ca3af', fontSize: 14 },
+  cardLabel: { fontSize: 10, fontWeight: '700', color: '#6b7280', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 6 },
   roomNumber: { fontSize: 20, fontWeight: '700', color: '#111827' },
   roomSub: { fontSize: 13, color: '#6b7280', marginTop: 3 },
+
   rentCard: {
-    margin: 16,
-    marginBottom: 0,
     backgroundColor: '#fff',
-    borderRadius: 16,
+    borderRadius: 14,
     padding: 16,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 1 },
@@ -208,29 +209,21 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
     elevation: 2,
   },
-  noRentCard: {
-    margin: 16,
-    marginBottom: 0,
-    backgroundColor: '#fff',
-    borderRadius: 16,
-    padding: 20,
-    alignItems: 'center',
-  },
-  rentHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 },
+  rentHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 },
   statusBadge: { borderRadius: 20, paddingHorizontal: 10, paddingVertical: 3 },
   statusText: { color: '#fff', fontSize: 11, fontWeight: '700' },
-  rentRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 12 },
+  rentRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 14 },
   rentStat: { flex: 1, alignItems: 'center' },
   rentDivider: { width: 1, height: 32, backgroundColor: '#e5e7eb' },
-  rentStatLabel: { fontSize: 11, color: '#6b7280', marginBottom: 2 },
-  rentStatValue: { fontSize: 16, fontWeight: '700', color: '#111827' },
-  progressBg: { height: 6, backgroundColor: '#e5e7eb', borderRadius: 3, overflow: 'hidden' },
-  progressFill: { height: 6, borderRadius: 3 },
+  rentStatLabel: { fontSize: 10, color: '#9ca3af', fontWeight: '500', textTransform: 'uppercase', marginBottom: 2 },
+  rentStatValue: { fontSize: 15, fontWeight: '700', color: '#111827' },
+  progressBg: { height: 4, backgroundColor: '#e5e7eb', borderRadius: 2, overflow: 'hidden' },
+  progressFill: { height: 4, borderRadius: 2 },
   dueDateText: { fontSize: 11, color: '#9ca3af', marginTop: 6 },
+
   depositCard: {
-    margin: 16,
     backgroundColor: '#eef2ff',
-    borderRadius: 16,
+    borderRadius: 14,
     padding: 16,
   },
   depositAmount: { fontSize: 24, fontWeight: '700', color: '#4f46e5', marginTop: 4 },

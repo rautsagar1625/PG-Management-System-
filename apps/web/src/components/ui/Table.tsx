@@ -55,7 +55,7 @@ export function Table<T>({
     <div className={cn('overflow-x-auto', className)}>
       <table className="w-full text-sm">
         <thead>
-          <tr className="border-b border-gray-200">
+          <tr className="border-b border-gray-200 bg-gray-50">
             {columns.map((col) => (
               <th
                 key={col.key}

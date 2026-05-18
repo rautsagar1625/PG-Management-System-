@@ -1,37 +1,9 @@
-import { Tabs, useRouter } from 'expo-router';
-import { Text, TouchableOpacity, Alert } from 'react-native';
-import { useAuth } from '../../src/context/AuthContext';
-import { logout } from '../../src/lib/auth';
+import { Tabs } from 'expo-router';
+import { Text } from 'react-native';
 
 function TabIcon({ emoji, focused }: { emoji: string; focused: boolean }) {
   return (
     <Text style={{ fontSize: focused ? 22 : 20, opacity: focused ? 1 : 0.55 }}>{emoji}</Text>
-  );
-}
-
-function LogoutButton() {
-  const { setUser } = useAuth();
-  const router = useRouter();
-
-  const handleLogout = () => {
-    Alert.alert('Sign Out', 'Are you sure you want to sign out?', [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Sign Out',
-        style: 'destructive',
-        onPress: async () => {
-          await logout();
-          setUser(null);
-          router.replace('/(auth)/login');
-        },
-      },
-    ]);
-  };
-
-  return (
-    <TouchableOpacity onPress={handleLogout} style={{ marginRight: 16, paddingVertical: 4, paddingHorizontal: 8 }}>
-      <Text style={{ fontSize: 13, color: '#dc2626', fontWeight: '600' }}>Sign Out</Text>
-    </TouchableOpacity>
   );
 }
 
@@ -43,7 +15,6 @@ export default function TenantLayout() {
         headerStyle: { backgroundColor: '#4f46e5' },
         headerTintColor: '#fff',
         headerTitleStyle: { fontWeight: '700', fontSize: 17 },
-        headerRight: () => <LogoutButton />,
         tabBarActiveTintColor: '#4f46e5',
         tabBarInactiveTintColor: '#9ca3af',
         tabBarStyle: {
