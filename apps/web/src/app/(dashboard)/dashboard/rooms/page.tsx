@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useRouter } from 'next/navigation';
 import {
@@ -30,14 +30,13 @@ export default function RoomsPage() {
   const { data: properties = [], isLoading: propsLoading } = useQuery({
     queryKey: ['properties'],
     queryFn: getProperties,
-    select: (data) => {
-      if (data.length > 0 && !selectedPropertyId) {
-        // Defer state update to avoid render-cycle warning
-        setTimeout(() => setSelectedPropertyId((prev) => prev || data[0]!.id), 0);
-      }
-      return data;
-    },
   });
+
+  useEffect(() => {
+    if (properties.length > 0 && !selectedPropertyId) {
+      setSelectedPropertyId(properties[0]!.id);
+    }
+  }, [properties, selectedPropertyId]);
 
   const activePropertyId = selectedPropertyId || properties[0]?.id || '';
 

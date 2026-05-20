@@ -11,32 +11,91 @@ import {
   Prisma,
   TenantStatus,
 } from '@prisma/client';
+import {
+  IsBoolean,
+  IsDateString,
+  IsNumber,
+  IsOptional,
+  IsString,
+  IsUUID,
+  Min,
+} from 'class-validator';
+import { Type } from 'class-transformer';
 
 import { TENANT_STATUS_TRANSITIONS } from '@pg-system/constants';
 
 import { PrismaService } from '../../database/prisma.service';
 import { AllocationService } from '../allocation/allocation.service';
 
-export interface MoveInDto {
-  bedId: string;
-  moveInDate: string;
-  monthlyRent: number;
-  depositAmount: number;
-  depositPaid: boolean;
-  kycSubmitted: boolean;
-}
+export class ScheduleVisitDto {
+  @IsDateString()
+  visitDate: string;
 
-export interface MoveOutDto {
-  moveOutDate: string;
-  depositRefundAmount?: number;
-  depositForfeitAmount?: number;
+  @IsString()
+  @IsOptional()
   notes?: string;
 }
 
-export interface RoomTransferDto {
+export class MoveInDto {
+  @IsUUID()
+  bedId: string;
+
+  @IsDateString()
+  moveInDate: string;
+
+  @IsNumber()
+  @Min(0)
+  @Type(() => Number)
+  monthlyRent: number;
+
+  @IsNumber()
+  @Min(0)
+  @Type(() => Number)
+  depositAmount: number;
+
+  @IsBoolean()
+  depositPaid: boolean;
+
+  @IsBoolean()
+  kycSubmitted: boolean;
+}
+
+export class MoveOutDto {
+  @IsDateString()
+  moveOutDate: string;
+
+  @IsNumber()
+  @Min(0)
+  @IsOptional()
+  @Type(() => Number)
+  depositRefundAmount?: number;
+
+  @IsNumber()
+  @Min(0)
+  @IsOptional()
+  @Type(() => Number)
+  depositForfeitAmount?: number;
+
+  @IsString()
+  @IsOptional()
+  notes?: string;
+}
+
+export class RoomTransferDto {
+  @IsUUID()
   newBedId: string;
+
+  @IsDateString()
   transferDate: string;
+
+  @IsNumber()
+  @Min(0)
+  @IsOptional()
+  @Type(() => Number)
   newMonthlyRent?: number;
+
+  @IsString()
+  @IsOptional()
   notes?: string;
 }
 
@@ -183,7 +242,7 @@ export class TenantWorkflowService {
     });
   }
 
-  async moveOut(tenantId: string, dto: MoveOutDto) {
+  async moveOut(tenantId: string, dto: MoveOutDto, recordedBy: string) {
     const tenant = await this.getTenant(tenantId);
 
     if (!['ACTIVE', 'NOTICE_PERIOD'].includes(tenant.status)) {
@@ -192,22 +251,20 @@ export class TenantWorkflowService {
       );
     }
 
-    // Collect pending dues summary — move-out is allowed but caller is informed
-    const pendingDues = await this.prisma.rentCycle.aggregate({
-      where: {
-        tenantId,
-        status: { in: ['PENDING', 'OVERDUE', 'PARTIAL'] },
-      },
-      _sum: { remainingAmount: true },
-      _count: { _all: true },
-    });
+    // Pending dues query and move-out write are in the same transaction
+    // to eliminate the TOCTOU window where a concurrent payment could change dues
+    const { result, pendingDues } = await this.prisma.$transaction(async (tx) => {
+      // Capture pending dues inside the transaction for a consistent snapshot
+      const dues = await tx.rentCycle.aggregate({
+        where: {
+          tenantId,
+          status: { in: ['PENDING', 'OVERDUE', 'PARTIAL'] },
+        },
+        _sum: { remainingAmount: true },
+        _count: { _all: true },
+      });
 
-    const result = await this.prisma.$transaction(async (tx) => {
-      await this.allocation.closeAllocation(
-        tx,
-        tenantId,
-        new Date(dto.moveOutDate),
-      );
+      await this.allocation.closeAllocation(tx, tenantId, new Date(dto.moveOutDate));
 
       const depositPaid = Number(tenant.depositBalance);
       const refundAmount = dto.depositRefundAmount ?? 0;
@@ -224,7 +281,23 @@ export class TenantWorkflowService {
         depositStatus = tenant.depositStatus;
       }
 
-      return tx.tenant.update({
+      // Record the deposit refund as a payment for audit trail
+      if (refundAmount > 0) {
+        await tx.payment.create({
+          data: {
+            tenantId,
+            propertyId: tenant.propertyId,
+            amount: new Prisma.Decimal(refundAmount),
+            type: 'DEPOSIT_REFUND',
+            method: 'CASH',
+            notes: dto.notes ?? undefined,
+            recordedBy,
+            paidAt: new Date(dto.moveOutDate),
+          },
+        });
+      }
+
+      const updated = await tx.tenant.update({
         where: { id: tenantId },
         data: {
           status: TenantStatus.MOVED_OUT,
@@ -233,6 +306,8 @@ export class TenantWorkflowService {
           notes: dto.notes ?? tenant.notes,
         },
       });
+
+      return { result: updated, pendingDues: dues };
     });
 
     return {

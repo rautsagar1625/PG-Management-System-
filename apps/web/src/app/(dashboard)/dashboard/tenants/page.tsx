@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useQuery, keepPreviousData } from '@tanstack/react-query';
 import { useRouter } from 'next/navigation';
 import {
@@ -104,13 +104,13 @@ export default function TenantsPage() {
   const { data: properties = [] } = useQuery({
     queryKey: ['properties'],
     queryFn: getProperties,
-    select: (data) => {
-      if (data.length > 0 && !selectedPropertyId) {
-        setTimeout(() => setSelectedPropertyId((prev) => prev || data[0]!.id), 0);
-      }
-      return data;
-    },
   });
+
+  useEffect(() => {
+    if (properties.length > 0 && !selectedPropertyId) {
+      setSelectedPropertyId(properties[0]!.id);
+    }
+  }, [properties, selectedPropertyId]);
 
   const activePropertyId = selectedPropertyId || properties[0]?.id || '';
 

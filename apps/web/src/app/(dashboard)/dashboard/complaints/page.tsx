@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   MessageSquare,
@@ -27,6 +27,7 @@ import {
   type ComplaintStatus,
   type ComplaintPriority,
 } from '@/lib/complaints-api';
+import { toast } from 'sonner';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Modal } from '@/components/ui/Modal';
@@ -110,13 +111,13 @@ export default function ComplaintsPage() {
   const { data: properties = [] } = useQuery({
     queryKey: ['properties'],
     queryFn: getProperties,
-    select: (data) => {
-      if (data.length > 0 && !selectedPropertyId) {
-        setTimeout(() => setSelectedPropertyId((prev) => prev || data[0]!.id), 0);
-      }
-      return data;
-    },
   });
+
+  useEffect(() => {
+    if (properties.length > 0 && !selectedPropertyId) {
+      setSelectedPropertyId(properties[0]!.id);
+    }
+  }, [properties, selectedPropertyId]);
 
   const activePropertyId = selectedPropertyId || properties[0]?.id || '';
 
@@ -156,6 +157,7 @@ export default function ComplaintsPage() {
       setShowCreate(false);
       setCreateForm({ title: '', description: '', category: 'MAINTENANCE', priority: 'MEDIUM' });
       setCreateError('');
+      toast.success('Complaint submitted');
     },
     onError: (err: unknown) => {
       const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message;
@@ -174,6 +176,7 @@ export default function ComplaintsPage() {
       qc.invalidateQueries({ queryKey: ['complaint', viewingId] });
       setUpdateComment('');
       setUpdateError('');
+      toast.success('Complaint updated');
     },
     onError: (err: unknown) => {
       const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message;

@@ -4,13 +4,17 @@ import type { TDocumentDefinitions, Content } from 'pdfmake/interfaces';
 
 import { PrismaService } from '../../database/prisma.service';
 
-// pdfmake requires Roboto for standard text — use standard fonts map
+// Load Roboto fonts from pdfmake's bundled VFS (base64 → Buffer)
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const vfsFonts = require('pdfmake/build/vfs_fonts') as { pdfMake?: { vfs: Record<string, string> } };
+const vfs: Record<string, string> = vfsFonts.pdfMake?.vfs ?? {};
+
 const fonts = {
   Roboto: {
-    normal: 'node_modules/pdfmake/build/vfs_fonts.js',
-    bold: 'node_modules/pdfmake/build/vfs_fonts.js',
-    italics: 'node_modules/pdfmake/build/vfs_fonts.js',
-    bolditalics: 'node_modules/pdfmake/build/vfs_fonts.js',
+    normal:      Buffer.from(vfs['Roboto-Regular.ttf']    ?? '', 'base64'),
+    bold:        Buffer.from(vfs['Roboto-Medium.ttf']     ?? '', 'base64'),
+    italics:     Buffer.from(vfs['Roboto-Italic.ttf']     ?? '', 'base64'),
+    bolditalics: Buffer.from(vfs['Roboto-MediumItalic.ttf'] ?? '', 'base64'),
   },
 };
 

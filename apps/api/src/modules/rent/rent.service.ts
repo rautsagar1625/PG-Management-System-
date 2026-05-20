@@ -1,21 +1,42 @@
 import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { PaymentType, Prisma, RentCycleStatus } from '@prisma/client';
+import { IsDateString, IsIn, IsNumber, IsOptional, IsPositive, IsString, IsUUID } from 'class-validator';
+import { Type } from 'class-transformer';
 
 import { RENT_GRACE_PERIOD_DAYS } from '@pg-system/constants';
 import { generateReceiptNumber, getRentDueDate, isRentOverdue } from '@pg-system/utils';
 
 import { PrismaService } from '../../database/prisma.service';
 
-export interface RecordPaymentDto {
+export class RecordPaymentDto {
+  @IsUUID()
   tenantId: string;
+
+  @IsUUID()
+  @IsOptional()
   rentCycleId?: string;
+
+  @IsNumber()
+  @IsPositive()
+  @Type(() => Number)
   amount: number;
+
+  @IsIn(['RENT', 'DEPOSIT', 'DEPOSIT_REFUND', 'DEPOSIT_ADJUSTMENT', 'FINE', 'MISCELLANEOUS'])
   type: 'RENT' | 'DEPOSIT' | 'DEPOSIT_REFUND' | 'DEPOSIT_ADJUSTMENT' | 'FINE' | 'MISCELLANEOUS';
+
+  @IsIn(['CASH', 'UPI', 'BANK_TRANSFER', 'CHEQUE', 'CARD', 'ONLINE'])
   method: 'CASH' | 'UPI' | 'BANK_TRANSFER' | 'CHEQUE' | 'CARD' | 'ONLINE';
+
+  @IsString()
+  @IsOptional()
   referenceNo?: string;
+
+  @IsString()
+  @IsOptional()
   notes?: string;
+
+  @IsDateString()
   paidAt: string;
-  recordedBy: string;
 }
 
 @Injectable()
@@ -80,11 +101,7 @@ export class RentService {
    * Record a payment and update the rent cycle status.
    * All financial changes happen inside a single transaction.
    */
-  async recordPayment(dto: RecordPaymentDto) {
-    if (dto.amount <= 0) {
-      throw new BadRequestException('Payment amount must be positive');
-    }
-
+  async recordPayment(dto: RecordPaymentDto, recordedBy: string) {
     const paidAt = new Date(dto.paidAt);
     if (paidAt > new Date()) {
       throw new BadRequestException('Payment date cannot be in the future');
@@ -137,31 +154,41 @@ export class RentService {
           method: dto.method,
           referenceNo: dto.referenceNo,
           notes: dto.notes,
-          recordedBy: dto.recordedBy,
+          recordedBy,
           paidAt,
         },
       });
 
-      const receiptNo = generateReceiptNumber(paidAt);
-      const receipt = await tx.receipt.create({
-        data: {
-          receiptNo,
-          tenantId: dto.tenantId,
-          paymentId: payment.id,
-        },
-      });
+      // Retry up to 5 times on the rare chance of a receiptNo collision
+      let receipt!: Awaited<ReturnType<typeof tx.receipt.create>>;
+      for (let attempt = 0; attempt < 5; attempt++) {
+        const receiptNo = generateReceiptNumber(paidAt);
+        try {
+          receipt = await tx.receipt.create({
+            data: { receiptNo, tenantId: dto.tenantId, paymentId: payment.id },
+          });
+          break;
+        } catch (e: unknown) {
+          const isPrismaConflict = typeof e === 'object' && e !== null && (e as { code?: string }).code === 'P2002';
+          if (attempt === 4 || !isPrismaConflict) throw e;
+        }
+      }
 
       // Update rent cycle if this is a rent payment linked to a cycle
       if (rentCycleId && dto.type === 'RENT') {
         const cycle = await tx.rentCycle.findUnique({ where: { id: rentCycleId } });
         if (cycle) {
-          const newPaid = Number(cycle.paidAmount) + dto.amount;
-          const newRemaining = Math.max(0, Number(cycle.rentAmount) - newPaid);
+          // Use Decimal arithmetic throughout to avoid IEEE 754 float errors
+          const newPaid = new Prisma.Decimal(cycle.paidAmount).add(new Prisma.Decimal(dto.amount));
+          const newRemaining = Prisma.Decimal.max(
+            new Prisma.Decimal(0),
+            new Prisma.Decimal(cycle.rentAmount).sub(newPaid),
+          );
 
           let newStatus: RentCycleStatus;
-          if (newRemaining === 0) {
+          if (newRemaining.isZero()) {
             newStatus = RentCycleStatus.PAID;
-          } else if (newPaid > 0) {
+          } else if (newPaid.greaterThan(0)) {
             newStatus = isRentOverdue(cycle.dueDate, RENT_GRACE_PERIOD_DAYS)
               ? RentCycleStatus.OVERDUE
               : RentCycleStatus.PARTIAL;
@@ -174,8 +201,8 @@ export class RentService {
           await tx.rentCycle.update({
             where: { id: rentCycleId },
             data: {
-              paidAmount: new Prisma.Decimal(newPaid),
-              remainingAmount: new Prisma.Decimal(newRemaining),
+              paidAmount: newPaid,
+              remainingAmount: newRemaining,
               status: newStatus,
             },
           });
@@ -186,14 +213,19 @@ export class RentService {
       if (dto.type === 'DEPOSIT') {
         const tenantData = await tx.tenant.findUnique({ where: { id: dto.tenantId } });
         if (tenantData) {
-          const newBalance = Number(tenantData.depositBalance) + dto.amount;
-          const depositStatus =
-            newBalance >= Number(tenantData.depositAmount) ? 'PAID' : 'PARTIALLY_PAID';
+          const newBalance = new Prisma.Decimal(tenantData.depositBalance).add(
+            new Prisma.Decimal(dto.amount),
+          );
+          const depositStatus = newBalance.greaterThanOrEqualTo(
+            new Prisma.Decimal(tenantData.depositAmount),
+          )
+            ? 'PAID'
+            : 'PARTIALLY_PAID';
 
           await tx.tenant.update({
             where: { id: dto.tenantId },
             data: {
-              depositBalance: new Prisma.Decimal(newBalance),
+              depositBalance: newBalance,
               depositStatus,
               // Activate tenant if they were DEPOSIT_PENDING
               ...(tenantData.status === 'DEPOSIT_PENDING' &&
@@ -273,7 +305,8 @@ export class RentService {
     limit?: number;
   }) {
     const { propertyId, month, year, status, search, page = 1, limit = 50 } = params;
-    const skip = (page - 1) * limit;
+    const cappedLimit = Math.min(limit, 200);
+    const skip = (page - 1) * cappedLimit;
 
     const baseWhere: Prisma.RentCycleWhereInput = { propertyId, month, year };
     const filterWhere: Prisma.RentCycleWhereInput = {
@@ -292,7 +325,7 @@ export class RentService {
       this.prisma.rentCycle.findMany({
         where: filterWhere,
         skip,
-        take: limit,
+        take: cappedLimit,
         orderBy: [{ remainingAmount: 'desc' }, { dueDate: 'asc' }],
         include: {
           tenant: {
@@ -348,8 +381,8 @@ export class RentService {
       meta: {
         total: filteredTotal,
         page,
-        limit,
-        totalPages: Math.ceil(filteredTotal / limit),
+        limit: cappedLimit,
+        totalPages: Math.ceil(filteredTotal / cappedLimit),
       },
     };
   }

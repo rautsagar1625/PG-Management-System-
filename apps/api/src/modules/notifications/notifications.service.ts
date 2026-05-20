@@ -13,14 +13,26 @@ export class NotificationsService {
     });
   }
 
-  async getUserNotifications(userId: string, unreadOnly = false) {
-    const notifications = await this.prisma.notification.findMany({
-      where: { userId, ...(unreadOnly && { isRead: false }) },
-      orderBy: { createdAt: 'desc' },
-      take: 50,
-    });
+  async getUserNotifications(userId: string, unreadOnly = false, page = 1, limit = 20) {
+    const skip = (page - 1) * limit;
+    const where = { userId, ...(unreadOnly && { isRead: false }) };
 
-    return { success: true, data: notifications };
+    const [notifications, total, unreadCount] = await Promise.all([
+      this.prisma.notification.findMany({
+        where,
+        orderBy: { createdAt: 'desc' },
+        skip,
+        take: limit,
+      }),
+      this.prisma.notification.count({ where }),
+      this.prisma.notification.count({ where: { userId, isRead: false } }),
+    ]);
+
+    return {
+      success: true,
+      data: notifications,
+      meta: { total, page, limit, totalPages: Math.ceil(total / limit), unreadCount },
+    };
   }
 
   async markRead(notificationId: string, userId: string) {

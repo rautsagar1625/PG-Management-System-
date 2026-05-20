@@ -1,12 +1,13 @@
 import { Body, Controller, Get, Param, Post, Put, Query, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
+import { Throttle } from '@nestjs/throttler';
 
 import type { RequestContext } from '@pg-system/types';
 
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { PropertyRoles } from '../../common/decorators/roles.decorator';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
-import { TenantWorkflowService, MoveInDto, MoveOutDto, RoomTransferDto } from './tenant-workflow.service';
+import { TenantWorkflowService, MoveInDto, MoveOutDto, RoomTransferDto, ScheduleVisitDto } from './tenant-workflow.service';
 import { TenantsService, CreateTenantDto } from './tenants.service';
 
 @ApiTags('Tenants')
@@ -32,35 +33,40 @@ export class TenantsController {
   @Post()
   @ApiOperation({ summary: 'Add a new lead/tenant' })
   @PropertyRoles('OWNER', 'OPERATOR', 'CO_OPERATOR')
+  @Throttle({ default: { limit: 10, ttl: 60000 } })
   create(@Body() dto: CreateTenantDto) {
     return this.tenantsService.create(dto);
   }
 
   @Get(':id')
   @ApiOperation({ summary: 'Get tenant details' })
-  findOne(@Param('id') id: string) {
-    return this.tenantsService.findOne(id);
+  @PropertyRoles('OWNER', 'OPERATOR', 'CO_OPERATOR', 'STAFF')
+  findOne(@Param('id') id: string, @CurrentUser() ctx: RequestContext) {
+    return this.tenantsService.findOne(id, ctx);
   }
 
   // ── Workflow transitions ───────────────────────────
 
   @Put(':id/schedule-visit')
   @ApiOperation({ summary: 'Schedule a property visit for a lead' })
+  @PropertyRoles('OWNER', 'OPERATOR', 'CO_OPERATOR', 'STAFF')
   scheduleVisit(
     @Param('id') id: string,
-    @Body() body: { visitDate: string; notes?: string },
+    @Body() dto: ScheduleVisitDto,
   ) {
-    return this.workflowService.scheduleVisit(id, body.visitDate, body.notes);
+    return this.workflowService.scheduleVisit(id, dto.visitDate, dto.notes);
   }
 
   @Put(':id/mark-visited')
   @ApiOperation({ summary: 'Mark visit as completed' })
+  @PropertyRoles('OWNER', 'OPERATOR', 'CO_OPERATOR', 'STAFF')
   markVisited(@Param('id') id: string) {
     return this.workflowService.markVisited(id);
   }
 
   @Put(':id/finalize-room')
   @ApiOperation({ summary: 'Finalize room/bed selection and reserve the bed' })
+  @PropertyRoles('OWNER', 'OPERATOR', 'CO_OPERATOR')
   finalizeRoom(
     @Param('id') id: string,
     @Body() body: { bedId: string; depositAmount: number },
@@ -70,24 +76,32 @@ export class TenantsController {
 
   @Put(':id/move-in')
   @ApiOperation({ summary: 'Complete move-in — activates tenant' })
+  @PropertyRoles('OWNER', 'OPERATOR', 'CO_OPERATOR')
   moveIn(@Param('id') id: string, @Body() dto: MoveInDto) {
     return this.workflowService.moveIn(id, dto);
   }
 
   @Put(':id/initiate-notice')
   @ApiOperation({ summary: 'Start notice period' })
+  @PropertyRoles('OWNER', 'OPERATOR', 'CO_OPERATOR')
   initiateNotice(@Param('id') id: string) {
     return this.workflowService.initiateNotice(id);
   }
 
   @Put(':id/move-out')
   @ApiOperation({ summary: 'Complete move-out and release bed' })
-  moveOut(@Param('id') id: string, @Body() dto: MoveOutDto) {
-    return this.workflowService.moveOut(id, dto);
+  @PropertyRoles('OWNER', 'OPERATOR', 'CO_OPERATOR')
+  moveOut(
+    @Param('id') id: string,
+    @Body() dto: MoveOutDto,
+    @CurrentUser() ctx: RequestContext,
+  ) {
+    return this.workflowService.moveOut(id, dto, ctx.userId);
   }
 
   @Put(':id/transfer-room')
   @ApiOperation({ summary: 'Transfer tenant to a different bed' })
+  @PropertyRoles('OWNER', 'OPERATOR', 'CO_OPERATOR')
   roomTransfer(@Param('id') id: string, @Body() dto: RoomTransferDto) {
     return this.workflowService.roomTransfer(id, dto);
   }

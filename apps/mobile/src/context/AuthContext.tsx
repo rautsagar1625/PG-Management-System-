@@ -1,5 +1,6 @@
-import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
 import { getStoredUser, type AuthUser } from '../lib/auth';
+import { setForceLogoutHandler } from '../lib/api';
 
 interface AuthContextValue {
   user: AuthUser | null;
@@ -16,6 +17,14 @@ const AuthContext = createContext<AuthContextValue>({
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+
+  const forceLogout = useCallback(() => {
+    setUser(null);
+  }, []);
+
+  useEffect(() => {
+    setForceLogoutHandler(forceLogout);
+  }, [forceLogout]);
 
   useEffect(() => {
     getStoredUser()

@@ -3,7 +3,7 @@ import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import type { RequestContext } from '@pg-system/types';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
-import { TenantSelfService } from './tenant-self.service';
+import { TenantSelfService, CreateTenantComplaintDto } from './tenant-self.service';
 
 @ApiTags('Tenant Self-Service')
 @ApiBearerAuth()
@@ -34,7 +34,7 @@ export class TenantSelfController {
   @ApiOperation({ summary: 'Raise a new complaint (tenant)' })
   createComplaint(
     @CurrentUser() ctx: RequestContext,
-    @Body() dto: { title: string; description: string; category: string; priority: string },
+    @Body() dto: CreateTenantComplaintDto,
   ) {
     return this.tenantSelfService.createComplaint(ctx.userId, dto);
   }

@@ -1,5 +1,6 @@
 import { Body, Controller, Get, Param, Post, Put, Query, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
+import { Throttle } from '@nestjs/throttler';
 
 import type { RequestContext } from '@pg-system/types';
 
@@ -25,13 +26,14 @@ export class RentController {
   @Post('payment')
   @ApiOperation({ summary: 'Record a payment (rent, deposit, fine, etc.)' })
   @PropertyRoles('OWNER', 'OPERATOR', 'CO_OPERATOR')
-  recordPayment(@Body() dto: Omit<RecordPaymentDto, 'recordedBy'> & { propertyId: string }, @CurrentUser() ctx: RequestContext) {
-    const { propertyId: _p, ...rest } = dto;
-    return this.rentService.recordPayment({ ...rest, recordedBy: ctx.userId });
+  @Throttle({ default: { limit: 20, ttl: 60000 } })
+  recordPayment(@Body() dto: RecordPaymentDto, @CurrentUser() ctx: RequestContext) {
+    return this.rentService.recordPayment(dto, ctx.userId);
   }
 
   @Get('tenant/:tenantId/cycles')
   @ApiOperation({ summary: 'Get rent cycles for a tenant' })
+  @PropertyRoles('OWNER', 'OPERATOR', 'CO_OPERATOR', 'STAFF')
   getRentCycles(
     @Param('tenantId') tenantId: string,
     @Query() filters: { month?: number; year?: number; status?: string },
@@ -77,6 +79,7 @@ export class RentController {
 
   @Get('receipt/:receiptNo')
   @ApiOperation({ summary: 'Get receipt details for display/print' })
+  @PropertyRoles('OWNER', 'OPERATOR', 'CO_OPERATOR', 'STAFF')
   getReceipt(@Param('receiptNo') receiptNo: string) {
     return this.rentService.getReceipt(receiptNo);
   }

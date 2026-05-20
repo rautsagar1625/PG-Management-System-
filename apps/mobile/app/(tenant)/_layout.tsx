@@ -1,9 +1,23 @@
 import { Tabs } from 'expo-router';
-import { Text } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 
-function TabIcon({ emoji, focused }: { emoji: string; focused: boolean }) {
+type IoniconsName = React.ComponentProps<typeof Ionicons>['name'];
+
+interface TabIconProps {
+  name: IoniconsName;
+  outlineName: IoniconsName;
+  focused: boolean;
+  color: string;
+  size: number;
+}
+
+function TabIcon({ name, outlineName, focused, color, size }: TabIconProps) {
   return (
-    <Text style={{ fontSize: focused ? 22 : 20, opacity: focused ? 1 : 0.55 }}>{emoji}</Text>
+    <Ionicons
+      name={focused ? name : outlineName}
+      size={size}
+      color={color}
+    />
   );
 }
 
@@ -15,43 +29,78 @@ export default function TenantLayout() {
         headerStyle: { backgroundColor: '#4f46e5' },
         headerTintColor: '#fff',
         headerTitleStyle: { fontWeight: '700', fontSize: 17 },
+        headerShadowVisible: false,
         tabBarActiveTintColor: '#4f46e5',
         tabBarInactiveTintColor: '#9ca3af',
         tabBarStyle: {
           backgroundColor: '#fff',
           borderTopColor: '#e5e7eb',
+          borderTopWidth: 1,
           paddingBottom: 6,
-          height: 60,
+          paddingTop: 4,
+          height: 62,
         },
-        tabBarLabelStyle: { fontSize: 11, fontWeight: '600' },
+        tabBarLabelStyle: { fontSize: 11, fontWeight: '600', marginTop: 1 },
       }}
     >
       <Tabs.Screen
         name="index"
         options={{
           title: 'Home',
-          tabBarIcon: ({ focused }) => <TabIcon emoji="🏠" focused={focused} />,
+          tabBarIcon: ({ focused, color, size }) => (
+            <TabIcon
+              name="home"
+              outlineName="home-outline"
+              focused={focused}
+              color={color}
+              size={size}
+            />
+          ),
         }}
       />
       <Tabs.Screen
         name="payments"
         options={{
           title: 'Payments',
-          tabBarIcon: ({ focused }) => <TabIcon emoji="💰" focused={focused} />,
+          tabBarIcon: ({ focused, color, size }) => (
+            <TabIcon
+              name="wallet"
+              outlineName="wallet-outline"
+              focused={focused}
+              color={color}
+              size={size}
+            />
+          ),
         }}
       />
       <Tabs.Screen
         name="complaints"
         options={{
           title: 'Complaints',
-          tabBarIcon: ({ focused }) => <TabIcon emoji="📋" focused={focused} />,
+          tabBarIcon: ({ focused, color, size }) => (
+            <TabIcon
+              name="chatbubble-ellipses"
+              outlineName="chatbubble-ellipses-outline"
+              focused={focused}
+              color={color}
+              size={size}
+            />
+          ),
         }}
       />
       <Tabs.Screen
         name="profile"
         options={{
           title: 'Profile',
-          tabBarIcon: ({ focused }) => <TabIcon emoji="👤" focused={focused} />,
+          tabBarIcon: ({ focused, color, size }) => (
+            <TabIcon
+              name="person-circle"
+              outlineName="person-circle-outline"
+              focused={focused}
+              color={color}
+              size={size}
+            />
+          ),
         }}
       />
     </Tabs>

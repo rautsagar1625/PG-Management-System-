@@ -56,11 +56,15 @@ apiClient.interceptors.response.use(
 export function setTokens(accessToken: string, refreshToken: string) {
   localStorage.setItem('access_token', accessToken);
   localStorage.setItem('refresh_token', refreshToken);
+  // Mirror the access token in a cookie so the middleware can verify auth
+  // without client JS (same XSS exposure as localStorage, but enables SSR guards)
+  document.cookie = `pg_session=${accessToken}; path=/; SameSite=Strict${location.protocol === 'https:' ? '; Secure' : ''}`;
 }
 
 export function clearTokens() {
   localStorage.removeItem('access_token');
   localStorage.removeItem('refresh_token');
+  document.cookie = 'pg_session=; path=/; max-age=0; SameSite=Strict';
 }
 
 export function getAccessToken() {

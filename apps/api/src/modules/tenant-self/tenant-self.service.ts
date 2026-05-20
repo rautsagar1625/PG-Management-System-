@@ -1,6 +1,24 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
+import { IsIn, IsOptional, IsString, MinLength } from 'class-validator';
 import { PrismaService } from '../../database/prisma.service';
 import { ComplaintCategory, Priority } from '@prisma/client';
+
+export class CreateTenantComplaintDto {
+  @IsString()
+  @MinLength(3)
+  title: string;
+
+  @IsString()
+  @MinLength(10)
+  description: string;
+
+  @IsIn(['MAINTENANCE', 'PLUMBING', 'ELECTRICAL', 'HOUSEKEEPING', 'SECURITY', 'FOOD', 'WIFI', 'NOISE', 'OTHER'])
+  category: string;
+
+  @IsIn(['LOW', 'MEDIUM', 'HIGH', 'URGENT'])
+  @IsOptional()
+  priority?: string;
+}
 
 @Injectable()
 export class TenantSelfService {
@@ -174,7 +192,7 @@ export class TenantSelfService {
 
   async createComplaint(
     userId: string,
-    dto: { title: string; description: string; category: string; priority: string },
+    dto: CreateTenantComplaintDto,
   ) {
     const tenant = await this.prisma.tenant.findUnique({
       where: { userId },

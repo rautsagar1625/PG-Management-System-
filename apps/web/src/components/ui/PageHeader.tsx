@@ -11,8 +11,8 @@ export function PageHeader({ title, subtitle, actions, className }: PageHeaderPr
   return (
     <div className={cn('flex items-start justify-between gap-4', className)}>
       <div>
-        <h1 className="text-2xl font-bold text-gray-900">{title}</h1>
-        {subtitle && <p className="text-sm text-gray-500 mt-0.5">{subtitle}</p>}
+        <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">{title}</h1>
+        {subtitle && <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">{subtitle}</p>}
       </div>
       {actions && <div className="flex items-center gap-3 shrink-0">{actions}</div>}
     </div>

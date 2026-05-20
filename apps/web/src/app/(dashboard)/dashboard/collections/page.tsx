@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'next/navigation';
 import {
@@ -9,19 +9,16 @@ import {
   Building2,
   ChevronDown,
   RefreshCw,
-  AlertTriangle,
   CheckCircle2,
-  Clock,
-  RotateCcw,
 } from 'lucide-react';
 import { getCollections, generateCycles, type CollectionCycle } from '@/lib/payments-api';
 import { getProperties } from '@/lib/properties-api';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { RentStatusBadge } from '@/components/ui/StatusBadge';
 import { EmptyState } from '@/components/ui/EmptyState';
-import { PageLoader } from '@/components/ui/LoadingSpinner';
+import { Pagination } from '@/components/ui/Table';
 import { PaymentModal } from '@/components/modals/PaymentModal';
-import { formatCurrency, formatDate } from '@/lib/utils';
+import { formatCurrency, formatDate, cn } from '@/lib/utils';
 import { useDebounce } from '@/hooks/useDebounce';
 
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
@@ -60,13 +57,13 @@ export default function CollectionsPage() {
   const { data: properties = [] } = useQuery({
     queryKey: ['properties'],
     queryFn: getProperties,
-    select: (data) => {
-      if (data.length > 0 && !selectedPropertyId) {
-        setTimeout(() => setSelectedPropertyId((prev) => prev || data[0]!.id), 0);
-      }
-      return data;
-    },
   });
+
+  useEffect(() => {
+    if (properties.length > 0 && !selectedPropertyId) {
+      setSelectedPropertyId(properties[0]!.id);
+    }
+  }, [properties, selectedPropertyId]);
 
   const activePropertyId = selectedPropertyId || properties[0]?.id || '';
 
@@ -244,9 +241,7 @@ export default function CollectionsPage() {
 
       {/* Table */}
       <div className="card overflow-hidden">
-        {isLoading ? (
-          <PageLoader />
-        ) : cycles.length === 0 ? (
+        {cycles.length === 0 && !isLoading ? (
           <EmptyState
             icon={IndianRupee}
             title={summary?.totalCycles === 0 ? 'No rent cycles' : 'No results'}
@@ -271,54 +266,54 @@ export default function CollectionsPage() {
           <div className={isFetching ? 'opacity-70 transition-opacity' : ''}>
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
-                <thead className="bg-gray-50 border-b border-gray-200">
+                <thead className="bg-gray-50 dark:bg-gray-800/60 border-b border-gray-200 dark:border-gray-700">
                   <tr>
-                    <th className="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase">Tenant</th>
-                    <th className="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase">Room</th>
-                    <th className="text-right px-4 py-3 text-xs font-medium text-gray-500 uppercase">Rent</th>
-                    <th className="text-right px-4 py-3 text-xs font-medium text-gray-500 uppercase">Paid</th>
-                    <th className="text-right px-4 py-3 text-xs font-medium text-gray-500 uppercase">Remaining</th>
-                    <th className="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase">Due</th>
-                    <th className="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase">Status</th>
+                    <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">Tenant</th>
+                    <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">Room</th>
+                    <th className="text-right px-4 py-3 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">Rent</th>
+                    <th className="text-right px-4 py-3 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">Paid</th>
+                    <th className="text-right px-4 py-3 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">Remaining</th>
+                    <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">Due</th>
+                    <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">Status</th>
                     <th className="px-4 py-3" />
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-gray-100">
-                  {cycles.map((cycle) => (
-                    <CollectionRow
-                      key={cycle.id}
-                      cycle={cycle}
-                      propertyName={currentPropertyName}
-                      onCollect={() => setPaymentTarget(cycle)}
-                      onViewTenant={() => router.push(`/dashboard/tenants/${cycle.tenant.id}`)}
-                    />
-                  ))}
-                </tbody>
+                {isLoading ? (
+                  <tbody>
+                    {Array.from({ length: 6 }).map((_, i) => (
+                      <tr key={i} className="border-b border-gray-100 dark:border-gray-700/60">
+                        {Array.from({ length: 8 }).map((_, j) => (
+                          <td key={j} className="px-4 py-3">
+                            <div className="h-4 bg-gray-100 dark:bg-gray-700 rounded animate-pulse" style={{ width: `${55 + (j * 13) % 35}%` }} />
+                          </td>
+                        ))}
+                      </tr>
+                    ))}
+                  </tbody>
+                ) : (
+                  <tbody className="divide-y divide-gray-100 dark:divide-gray-700/60">
+                    {cycles.map((cycle) => (
+                      <CollectionRow
+                        key={cycle.id}
+                        cycle={cycle}
+                        propertyName={currentPropertyName}
+                        onCollect={() => setPaymentTarget(cycle)}
+                        onViewTenant={() => router.push(`/dashboard/tenants/${cycle.tenant.id}`)}
+                      />
+                    ))}
+                  </tbody>
+                )}
               </table>
             </div>
 
             {meta && meta.totalPages > 1 && (
-              <div className="flex items-center justify-between px-4 py-3 border-t border-gray-200 text-sm text-gray-500">
-                <span>
-                  Showing {(meta.page - 1) * meta.limit + 1}–{Math.min(meta.page * meta.limit, meta.total)} of {meta.total}
-                </span>
-                <div className="flex gap-2">
-                  <button
-                    onClick={() => setPage((p) => p - 1)}
-                    disabled={meta.page === 1}
-                    className="px-3 py-1 rounded border border-gray-200 disabled:opacity-40 hover:bg-gray-50 transition-colors"
-                  >
-                    Prev
-                  </button>
-                  <button
-                    onClick={() => setPage((p) => p + 1)}
-                    disabled={meta.page >= meta.totalPages}
-                    className="px-3 py-1 rounded border border-gray-200 disabled:opacity-40 hover:bg-gray-50 transition-colors"
-                  >
-                    Next
-                  </button>
-                </div>
-              </div>
+              <Pagination
+                page={page}
+                totalPages={meta.totalPages}
+                total={meta.total}
+                limit={50}
+                onChange={setPage}
+              />
             )}
           </div>
         )}
@@ -367,16 +362,16 @@ function SummaryCard({
   color: 'gray' | 'green' | 'yellow' | 'red';
 }) {
   const colors = {
-    gray: 'text-gray-900',
-    green: 'text-green-700',
-    yellow: 'text-yellow-700',
-    red: 'text-red-700',
+    gray:   'text-gray-900 dark:text-gray-100',
+    green:  'text-green-700 dark:text-green-400',
+    yellow: 'text-yellow-700 dark:text-yellow-400',
+    red:    'text-red-700 dark:text-red-400',
   };
   return (
     <div className="card p-4">
-      <p className="text-xs text-gray-500 font-medium">{label}</p>
-      <p className={`text-lg font-bold mt-0.5 ${colors[color]}`}>{value}</p>
-      <p className="text-xs text-gray-400 mt-0.5">{sub}</p>
+      <p className="text-xs text-gray-500 dark:text-gray-400 font-medium">{label}</p>
+      <p className={cn('text-lg font-bold mt-0.5', colors[color])}>{value}</p>
+      <p className="text-xs text-gray-400 dark:text-gray-500 mt-0.5">{sub}</p>
     </div>
   );
 }
@@ -400,43 +395,50 @@ function CollectionRow({
   const days = isOverdue ? overdueDays(cycle.dueDate) : 0;
 
   return (
-    <tr className={`hover:bg-gray-50 transition-colors ${isOverdue ? 'bg-red-50/30' : ''}`}>
+    <tr className={cn(
+      'hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors',
+      isOverdue && 'bg-red-50/30 dark:bg-red-900/10',
+    )}>
       <td className="px-4 py-3">
         <div>
           <button
             onClick={onViewTenant}
-            className="font-medium text-gray-900 hover:text-primary-600 transition-colors text-left"
+            className="font-medium text-gray-900 dark:text-gray-100 hover:text-primary-600 dark:hover:text-primary-400 transition-colors text-left"
           >
             {cycle.tenant.user.name}
           </button>
-          <p className="text-xs text-gray-400 font-mono">{cycle.tenant.tenantCode}</p>
+          <p className="text-xs text-gray-400 dark:text-gray-500 font-mono">{cycle.tenant.tenantCode}</p>
         </div>
       </td>
-      <td className="px-4 py-3 text-gray-600">
+      <td className="px-4 py-3 text-gray-600 dark:text-gray-400">
         {alloc ? (
           <span>{alloc.bed.room.number} — {alloc.bed.label}</span>
         ) : (
-          <span className="text-gray-400">—</span>
+          <span className="text-gray-400 dark:text-gray-600">—</span>
         )}
       </td>
-      <td className="px-4 py-3 text-right text-gray-700">
+      <td className="px-4 py-3 text-right text-gray-700 dark:text-gray-300">
         {formatCurrency(Number(cycle.rentAmount))}
       </td>
-      <td className="px-4 py-3 text-right text-green-700 font-medium">
+      <td className="px-4 py-3 text-right text-green-700 dark:text-green-400 font-medium">
         {Number(cycle.paidAmount) > 0 ? formatCurrency(Number(cycle.paidAmount)) : (
-          <span className="text-gray-300">—</span>
+          <span className="text-gray-300 dark:text-gray-600">—</span>
         )}
       </td>
       <td className="px-4 py-3 text-right">
-        <span className={Number(cycle.remainingAmount) > 0 ? 'text-red-700 font-semibold' : 'text-gray-400'}>
+        <span className={cn(
+          Number(cycle.remainingAmount) > 0
+            ? 'text-red-700 dark:text-red-400 font-semibold'
+            : 'text-gray-400 dark:text-gray-600',
+        )}>
           {Number(cycle.remainingAmount) > 0 ? formatCurrency(Number(cycle.remainingAmount)) : '—'}
         </span>
       </td>
-      <td className="px-4 py-3 text-gray-500">
+      <td className="px-4 py-3 text-gray-500 dark:text-gray-400">
         <div>
           <span className="text-xs">{formatDate(cycle.dueDate)}</span>
           {isOverdue && days > 0 && (
-            <p className="text-xs text-red-600 font-medium mt-0.5">{days}d overdue</p>
+            <p className="text-xs text-red-600 dark:text-red-400 font-medium mt-0.5">{days}d overdue</p>
           )}
         </div>
       </td>
@@ -447,12 +449,12 @@ function CollectionRow({
         {!isPaid ? (
           <button
             onClick={onCollect}
-            className="text-xs px-3 py-1.5 bg-primary-600 text-white rounded-lg font-medium hover:bg-primary-700 transition-colors whitespace-nowrap"
+            className="text-xs px-3 py-1.5 bg-primary-600 hover:bg-primary-700 text-white rounded-lg font-medium transition-colors whitespace-nowrap"
           >
             Collect
           </button>
         ) : (
-          <span className="text-xs text-green-600 flex items-center gap-1 justify-end">
+          <span className="text-xs text-green-600 dark:text-green-400 flex items-center gap-1 justify-end">
             <CheckCircle2 className="w-3.5 h-3.5" />
             Paid
           </span>

@@ -47,8 +47,8 @@ export default function DashboardPage() {
       {/* Header */}
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Dashboard</h1>
-          <p className="text-sm text-gray-500 mt-0.5">Operational overview</p>
+          <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">Dashboard</h1>
+          <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">Operational overview</p>
         </div>
 
         {properties.length > 1 && (
@@ -165,11 +165,11 @@ export default function DashboardPage() {
             <div className="card p-5">
               <div className="flex items-center justify-between mb-3">
                 <div>
-                  <p className="text-sm font-medium text-gray-500">Occupancy</p>
-                  <p className="text-2xl font-bold text-gray-900">{activeCard.occupancyRate}%</p>
+                  <p className="text-sm font-medium text-gray-500 dark:text-gray-400">Occupancy</p>
+                  <p className="text-2xl font-bold text-gray-900 dark:text-gray-100">{activeCard.occupancyRate}%</p>
                 </div>
-                <div className="w-10 h-10 rounded-xl bg-purple-50 flex items-center justify-center">
-                  <BedDouble className="w-5 h-5 text-purple-600" />
+                <div className="w-10 h-10 rounded-xl bg-purple-50 dark:bg-purple-900/30 flex items-center justify-center">
+                  <BedDouble className="w-5 h-5 text-purple-600 dark:text-purple-400" />
                 </div>
               </div>
               <OccupancyBar
@@ -183,14 +183,14 @@ export default function DashboardPage() {
             <div className="card p-5">
               <div className="flex items-center justify-between mb-3">
                 <div>
-                  <p className="text-sm font-medium text-gray-500">Collection Rate</p>
-                  <p className="text-2xl font-bold text-gray-900">{activeCard.rentCollectionRate}%</p>
+                  <p className="text-sm font-medium text-gray-500 dark:text-gray-400">Collection Rate</p>
+                  <p className="text-2xl font-bold text-gray-900 dark:text-gray-100">{activeCard.rentCollectionRate}%</p>
                 </div>
-                <div className="w-10 h-10 rounded-xl bg-primary-50 flex items-center justify-center">
-                  <TrendingUp className="w-5 h-5 text-primary-600" />
+                <div className="w-10 h-10 rounded-xl bg-primary-50 dark:bg-primary-900/30 flex items-center justify-center">
+                  <TrendingUp className="w-5 h-5 text-primary-600 dark:text-primary-400" />
                 </div>
               </div>
-              <div className="w-full bg-gray-100 rounded-full h-2">
+              <div className="w-full bg-gray-100 dark:bg-gray-700 rounded-full h-2">
                 <div
                   className={cn(
                     'h-2 rounded-full transition-all',
@@ -203,7 +203,7 @@ export default function DashboardPage() {
                   style={{ width: `${activeCard.rentCollectionRate}%` }}
                 />
               </div>
-              <div className="flex justify-between mt-1.5 text-xs text-gray-400">
+              <div className="flex justify-between mt-1.5 text-xs text-gray-400 dark:text-gray-500">
                 <span>{formatCurrency(activeCard.totalCollectedRent)} collected</span>
                 <span>{formatCurrency(activeCard.totalExpectedRent)} expected</span>
               </div>
@@ -243,8 +243,8 @@ export default function DashboardPage() {
       {/* Multi-property property list */}
       {!isLoading && dashboard && dashboard.properties.length > 1 && (
         <div className="card overflow-hidden">
-          <div className="px-4 py-3 border-b border-gray-200">
-            <h3 className="text-sm font-semibold text-gray-700">All Properties</h3>
+          <div className="px-4 py-3 border-b border-gray-200 dark:border-gray-700">
+            <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300">All Properties</h3>
           </div>
           <div className="divide-y divide-gray-100">
             {dashboard.properties.map((prop) => (
@@ -263,7 +263,7 @@ function MiniStat({
   label,
   value,
   sub,
-  valueClass = 'text-gray-900',
+  valueClass = 'text-gray-900 dark:text-gray-100',
 }: {
   label: string;
   value: string | number;
@@ -272,9 +272,9 @@ function MiniStat({
 }) {
   return (
     <div className="card p-4">
-      <p className="text-xs text-gray-500 font-medium">{label}</p>
+      <p className="text-xs text-gray-500 dark:text-gray-400 font-medium">{label}</p>
       <p className={`text-xl font-bold mt-0.5 ${valueClass}`}>{value}</p>
-      <p className="text-xs text-gray-400 mt-0.5">{sub}</p>
+      <p className="text-xs text-gray-400 dark:text-gray-500 mt-0.5">{sub}</p>
     </div>
   );
 }
@@ -297,15 +297,15 @@ function StatCard({
   return (
     <button
       onClick={onClick}
-      className="card p-5 text-left hover:shadow-md transition-shadow w-full"
+      className="card p-5 text-left hover:shadow-md transition-shadow w-full group"
     >
       <div className="flex items-start justify-between">
         <div className="min-w-0">
-          <p className="text-sm text-gray-500 font-medium">{title}</p>
-          <p className="text-2xl font-bold text-gray-900 mt-1 truncate">{value}</p>
-          {subtitle && <p className="text-xs text-gray-400 mt-1">{subtitle}</p>}
+          <p className="text-sm text-gray-500 dark:text-gray-400 font-medium">{title}</p>
+          <p className="text-2xl font-bold text-gray-900 dark:text-gray-100 mt-1 truncate">{value}</p>
+          {subtitle && <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">{subtitle}</p>}
         </div>
-        <div className={cn('w-10 h-10 rounded-xl flex items-center justify-center shrink-0', iconClass)}>
+        <div className={cn('w-10 h-10 rounded-xl flex items-center justify-center shrink-0 transition-transform group-hover:scale-105', iconClass)}>
           <Icon className="w-5 h-5" />
         </div>
       </div>
@@ -337,10 +337,10 @@ function QuickActionCard({
         <Icon className={cn('w-5 h-5', iconClass)} />
       </div>
       <div className="flex-1 min-w-0">
-        <p className="text-sm font-semibold text-gray-900">{label}</p>
-        <p className="text-xs text-gray-500 mt-0.5">{description}</p>
+        <p className="text-sm font-semibold text-gray-900 dark:text-gray-100">{label}</p>
+        <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">{description}</p>
       </div>
-      <ArrowRight className="w-4 h-4 text-gray-300 group-hover:text-gray-500 transition-colors shrink-0" />
+      <ArrowRight className="w-4 h-4 text-gray-300 dark:text-gray-600 group-hover:text-gray-500 dark:group-hover:text-gray-400 transition-colors shrink-0" />
     </button>
   );
 }
@@ -349,12 +349,12 @@ function PropertyRow({ prop, router }: { prop: PropertyCard; router: ReturnType<
   return (
     <button
       onClick={() => router.push(`/dashboard/properties/${prop.propertyId}`)}
-      className="w-full px-4 py-3 flex items-center gap-4 hover:bg-gray-50 transition-colors text-left"
+      className="w-full px-4 py-3 flex items-center gap-4 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors text-left"
     >
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2">
-          <p className="text-sm font-semibold text-gray-900 truncate">{prop.propertyName}</p>
-          <span className="text-xs text-gray-400">{prop.city}</span>
+          <p className="text-sm font-semibold text-gray-900 dark:text-gray-100 truncate">{prop.propertyName}</p>
+          <span className="text-xs text-gray-400 dark:text-gray-500">{prop.city}</span>
         </div>
         <OccupancyBar
           occupied={prop.occupiedBeds}
@@ -364,8 +364,8 @@ function PropertyRow({ prop, router }: { prop: PropertyCard; router: ReturnType<
         />
       </div>
       <div className="shrink-0 text-right">
-        <p className="text-sm font-semibold text-green-700">{formatCurrency(prop.totalCollectedRent)}</p>
-        <p className="text-xs text-gray-400">{prop.rentCollectionRate}% collected</p>
+        <p className="text-sm font-semibold text-green-700 dark:text-green-400">{formatCurrency(prop.totalCollectedRent)}</p>
+        <p className="text-xs text-gray-400 dark:text-gray-500">{prop.rentCollectionRate}% collected</p>
       </div>
       {prop.openComplaints > 0 && (
         <div className="w-6 h-6 rounded-full bg-red-100 flex items-center justify-center shrink-0">

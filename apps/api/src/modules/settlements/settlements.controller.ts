@@ -1,5 +1,6 @@
 import { Body, Controller, Get, Param, Post, Put, Query, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
+import { Throttle } from '@nestjs/throttler';
 
 import type { RequestContext } from '@pg-system/types';
 
@@ -18,6 +19,7 @@ export class SettlementsController {
   @Post('calculate')
   @ApiOperation({ summary: 'Calculate owner-operator settlement for a month' })
   @PropertyRoles('OWNER', 'OPERATOR')
+  @Throttle({ default: { limit: 5, ttl: 60000 } })
   calculate(
     @Body() body: { propertyId: string; month: number; year: number },
     @CurrentUser() ctx: RequestContext,
@@ -32,6 +34,7 @@ export class SettlementsController {
 
   @Put(':id/mark-paid')
   @ApiOperation({ summary: 'Mark settlement as paid by owner' })
+  @PropertyRoles('OWNER', 'OPERATOR')
   markPaid(
     @Param('id') id: string,
     @Body() body: { notes?: string },

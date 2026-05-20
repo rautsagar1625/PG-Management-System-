@@ -27,18 +27,21 @@ export class ComplaintsController {
 
   @Post()
   @ApiOperation({ summary: 'Raise a complaint' })
+  @PropertyRoles('OWNER', 'OPERATOR', 'CO_OPERATOR', 'STAFF')
   create(@Body() dto: CreateComplaintDto, @CurrentUser() ctx: RequestContext) {
     return this.complaintsService.create(dto, ctx.userId);
   }
 
   @Get(':id')
   @ApiOperation({ summary: 'Get complaint details with comments' })
+  @PropertyRoles('OWNER', 'OPERATOR', 'CO_OPERATOR', 'STAFF')
   findOne(@Param('id') id: string) {
     return this.complaintsService.findOne(id);
   }
 
   @Put(':id')
   @ApiOperation({ summary: 'Update complaint status, assignment, or add comment' })
+  @PropertyRoles('OWNER', 'OPERATOR', 'CO_OPERATOR', 'STAFF')
   update(
     @Param('id') id: string,
     @Body() dto: UpdateComplaintDto,

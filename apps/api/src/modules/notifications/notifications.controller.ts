@@ -19,8 +19,15 @@ export class NotificationsController {
   getAll(
     @CurrentUser() ctx: RequestContext,
     @Query('unreadOnly') unreadOnly?: boolean,
+    @Query('page') page?: number,
+    @Query('limit') limit?: number,
   ) {
-    return this.notificationsService.getUserNotifications(ctx.userId, unreadOnly);
+    return this.notificationsService.getUserNotifications(
+      ctx.userId,
+      unreadOnly,
+      page ? Number(page) : 1,
+      limit ? Number(limit) : 20,
+    );
   }
 
   @Put(':id/read')

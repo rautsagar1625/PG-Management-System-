@@ -1,4 +1,4 @@
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as SecureStore from 'expo-secure-store';
 import { api } from './api';
 
 export interface AuthUser {
@@ -15,6 +15,12 @@ export interface LoginResult {
   user: AuthUser;
 }
 
+const KEYS = {
+  ACCESS_TOKEN: 'pg_access_token',
+  REFRESH_TOKEN: 'pg_refresh_token',
+  USER: 'pg_user',
+} as const;
+
 export async function login(email: string, password: string): Promise<LoginResult> {
   const res = await api.post<{
     success: boolean;
@@ -22,26 +28,36 @@ export async function login(email: string, password: string): Promise<LoginResul
   }>('/auth/login', { email, password });
   const { user, tokens } = res.data;
   const { accessToken, refreshToken } = tokens;
-  await AsyncStorage.setItem('access_token', accessToken);
-  await AsyncStorage.setItem('refresh_token', refreshToken);
-  await AsyncStorage.setItem('user', JSON.stringify(user));
+  await storeTokens(accessToken, refreshToken, user);
   return { accessToken, refreshToken, user };
 }
 
 export async function logout(): Promise<void> {
-  const refreshToken = await AsyncStorage.getItem('refresh_token');
+  const refreshToken = await SecureStore.getItemAsync(KEYS.REFRESH_TOKEN);
   if (refreshToken) {
     try {
       await api.post('/auth/logout', { refreshToken });
     } catch {
-      // ignore logout errors
+      // ignore logout errors — local cleanup proceeds regardless
     }
   }
-  await AsyncStorage.multiRemove(['access_token', 'refresh_token', 'user']);
+  await SecureStore.deleteItemAsync(KEYS.ACCESS_TOKEN);
+  await SecureStore.deleteItemAsync(KEYS.REFRESH_TOKEN);
+  await SecureStore.deleteItemAsync(KEYS.USER);
+}
+
+export async function storeTokens(
+  accessToken: string,
+  refreshToken: string,
+  user: AuthUser,
+): Promise<void> {
+  await SecureStore.setItemAsync(KEYS.ACCESS_TOKEN, accessToken);
+  await SecureStore.setItemAsync(KEYS.REFRESH_TOKEN, refreshToken);
+  await SecureStore.setItemAsync(KEYS.USER, JSON.stringify(user));
 }
 
 export async function getStoredUser(): Promise<AuthUser | null> {
-  const raw = await AsyncStorage.getItem('user');
+  const raw = await SecureStore.getItemAsync(KEYS.USER);
   if (!raw) return null;
   try {
     return JSON.parse(raw) as AuthUser;
@@ -51,5 +67,9 @@ export async function getStoredUser(): Promise<AuthUser | null> {
 }
 
 export async function getAccessToken(): Promise<string | null> {
-  return AsyncStorage.getItem('access_token');
+  return SecureStore.getItemAsync(KEYS.ACCESS_TOKEN);
+}
+
+export async function getRefreshToken(): Promise<string | null> {
+  return SecureStore.getItemAsync(KEYS.REFRESH_TOKEN);
 }

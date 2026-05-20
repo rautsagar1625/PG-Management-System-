@@ -7,9 +7,11 @@ import {
   TouchableOpacity,
   RefreshControl,
 } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { getTenantRentHistory } from '../../src/lib/tenant-api';
 import { useAsync } from '../../src/lib/hooks';
 import { formatCurrency, formatDate } from '../../src/lib/format';
+import { colors } from '../../src/theme';
 
 const MONTH_NAMES = [
   'January','February','March','April','May','June',
@@ -21,7 +23,7 @@ const STATUS_CONFIG: Record<string, { label: string; color: string; bg: string }
   PAID:    { label: 'Paid',     color: '#065f46', bg: '#d1fae5' },
   PARTIAL: { label: 'Partial',  color: '#1e40af', bg: '#dbeafe' },
   OVERDUE: { label: 'Overdue',  color: '#991b1b', bg: '#fee2e2' },
-  WAIVED:  { label: 'Waived',   color: '#374151', bg: '#f3f4f6' },
+  WAIVED:  { label: 'Waived',   color: '#374151', bg: colors.gray100 },
 };
 
 export default function PaymentsScreen() {
@@ -63,14 +65,14 @@ export default function PaymentsScreen() {
 
         {cycles.length === 0 && !loading && (
           <View style={styles.emptyBox}>
-            <Text style={styles.emptyIcon}>💰</Text>
+            <Ionicons name="wallet-outline" size={44} color="#d1d5db" style={{ marginBottom: 12 }} />
             <Text style={styles.emptyTitle}>No rent cycles yet</Text>
             <Text style={styles.emptyText}>Your rent history will appear here.</Text>
           </View>
         )}
 
         {cycles.map((cycle) => {
-          const cfg = STATUS_CONFIG[cycle.status] ?? { label: cycle.status, color: '#374151', bg: '#f3f4f6' };
+          const cfg = STATUS_CONFIG[cycle.status] ?? { label: cycle.status, color: '#374151', bg: colors.gray100 };
           const pct = cycle.expectedRent > 0
             ? Math.min(100, (cycle.paidAmount / cycle.expectedRent) * 100)
             : 0;
@@ -96,7 +98,7 @@ export default function PaymentsScreen() {
                     styles.progressFill,
                     {
                       width: `${pct}%` as `${number}%`,
-                      backgroundColor: cycle.status === 'OVERDUE' ? '#ef4444' : '#4f46e5',
+                      backgroundColor: cycle.status === 'OVERDUE' ? colors.red500 : colors.primary,
                     },
                   ]}
                 />
@@ -120,7 +122,7 @@ export default function PaymentsScreen() {
                     <View style={styles.amountDivider} />
                     <View style={styles.amountItem}>
                       <Text style={styles.amountLabel}>Due</Text>
-                      <Text style={[styles.amountValue, { color: '#ef4444' }]}>
+                      <Text style={[styles.amountValue, { color: colors.red500 }]}>
                         {formatCurrency(cycle.remainingAmount)}
                       </Text>
                     </View>
@@ -136,7 +138,7 @@ export default function PaymentsScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#f3f4f6' },
+  container: { flex: 1, backgroundColor: colors.gray100 },
   center: { paddingVertical: 60, alignItems: 'center' },
   errorBox: {
     margin: 16,
@@ -176,7 +178,6 @@ const styles = StyleSheet.create({
   dueBannerSub: { fontSize: 12, color: '#9ca3af', marginTop: 4 },
 
   emptyBox: { paddingVertical: 60, alignItems: 'center' },
-  emptyIcon: { fontSize: 40, marginBottom: 12 },
   emptyTitle: { fontSize: 16, fontWeight: '700', color: '#374151', marginBottom: 4 },
   emptyText: { fontSize: 13, color: '#9ca3af' },
 

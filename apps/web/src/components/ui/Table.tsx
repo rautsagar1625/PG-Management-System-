@@ -31,7 +31,7 @@ function SkeletonRows({ cols, rows = 5 }: { cols: number; rows?: number }) {
         <tr key={i}>
           {Array.from({ length: cols }).map((_, j) => (
             <td key={j} className="py-3 px-4">
-              <div className="h-4 bg-gray-100 rounded animate-pulse" style={{ width: `${60 + (j * 15) % 40}%` }} />
+              <div className="h-4 bg-gray-100 dark:bg-gray-700 rounded animate-pulse" style={{ width: `${60 + (j * 15) % 40}%` }} />
             </td>
           ))}
         </tr>
@@ -55,12 +55,12 @@ export function Table<T>({
     <div className={cn('overflow-x-auto', className)}>
       <table className="w-full text-sm">
         <thead>
-          <tr className="border-b border-gray-200 bg-gray-50">
+          <tr className="border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/60">
             {columns.map((col) => (
               <th
                 key={col.key}
                 className={cn(
-                  'text-left py-3 px-4 text-xs font-semibold text-gray-500 uppercase tracking-wide whitespace-nowrap',
+                  'text-left py-3 px-4 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide whitespace-nowrap',
                   col.headerClassName,
                 )}
               >
@@ -69,7 +69,7 @@ export function Table<T>({
             ))}
           </tr>
         </thead>
-        <tbody className="divide-y divide-gray-100">
+        <tbody className="divide-y divide-gray-100 dark:divide-gray-700/60">
           {isLoading ? (
             <SkeletonRows cols={columns.length} />
           ) : data.length === 0 ? (
@@ -89,13 +89,13 @@ export function Table<T>({
                 onClick={onRowClick ? () => onRowClick(row) : undefined}
                 className={cn(
                   'transition-colors',
-                  onRowClick && 'cursor-pointer hover:bg-gray-50',
+                  onRowClick && 'cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800/50',
                 )}
               >
                 {columns.map((col) => (
                   <td
                     key={col.key}
-                    className={cn('py-3 px-4 text-gray-700', col.className)}
+                    className={cn('py-3 px-4 text-gray-700 dark:text-gray-300', col.className)}
                   >
                     {col.render(row)}
                   </td>
@@ -122,25 +122,25 @@ export function Pagination({ page, totalPages, total, limit, onChange }: Paginat
   const to = Math.min(page * limit, total);
 
   return (
-    <div className="flex items-center justify-between px-4 py-3 border-t border-gray-200">
-      <p className="text-xs text-gray-500">
+    <div className="flex items-center justify-between px-4 py-3 border-t border-gray-200 dark:border-gray-700">
+      <p className="text-xs text-gray-500 dark:text-gray-400">
         Showing {from}–{to} of {total}
       </p>
       <div className="flex items-center gap-1">
         <button
           onClick={() => onChange(page - 1)}
           disabled={page <= 1}
-          className="p-1.5 rounded-lg text-gray-400 hover:text-gray-700 hover:bg-gray-100 disabled:opacity-40 disabled:pointer-events-none transition-colors"
+          className="p-1.5 rounded-lg text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 disabled:opacity-40 disabled:pointer-events-none transition-colors"
         >
           <ChevronLeft className="w-4 h-4" />
         </button>
-        <span className="text-xs text-gray-600 px-2">
+        <span className="text-xs text-gray-600 dark:text-gray-400 px-2">
           {page} / {totalPages}
         </span>
         <button
           onClick={() => onChange(page + 1)}
           disabled={page >= totalPages}
-          className="p-1.5 rounded-lg text-gray-400 hover:text-gray-700 hover:bg-gray-100 disabled:opacity-40 disabled:pointer-events-none transition-colors"
+          className="p-1.5 rounded-lg text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 disabled:opacity-40 disabled:pointer-events-none transition-colors"
         >
           <ChevronRight className="w-4 h-4" />
         </button>

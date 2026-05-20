@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   Building2,
@@ -24,6 +24,7 @@ import { EmptyState } from '@/components/ui/EmptyState';
 import { PageLoader } from '@/components/ui/LoadingSpinner';
 import { ConfirmModal } from '@/components/ui/ConfirmModal';
 import { formatCurrency, formatDate } from '@/lib/utils';
+import { toast } from 'sonner';
 
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
@@ -46,13 +47,13 @@ export default function SettlementsPage() {
   const { data: properties = [] } = useQuery({
     queryKey: ['properties'],
     queryFn: getProperties,
-    select: (data) => {
-      if (data.length > 0 && !selectedPropertyId) {
-        setTimeout(() => setSelectedPropertyId((prev) => prev || data[0]!.id), 0);
-      }
-      return data;
-    },
   });
+
+  useEffect(() => {
+    if (properties.length > 0 && !selectedPropertyId) {
+      setSelectedPropertyId(properties[0]!.id);
+    }
+  }, [properties, selectedPropertyId]);
 
   const activePropertyId = selectedPropertyId || properties[0]?.id || '';
 
@@ -69,8 +70,13 @@ export default function SettlementsPage() {
     onSuccess: () => {
       setCalcError('');
       qc.invalidateQueries({ queryKey: ['settlements', activePropertyId] });
+      toast.success('Settlement calculated successfully');
     },
-    onError: (e: Error) => setCalcError(e.message ?? 'Calculation failed'),
+    onError: (e: Error) => {
+      const msg = e.message ?? 'Calculation failed';
+      setCalcError(msg);
+      toast.error(msg);
+    },
   });
 
   const markPaidMut = useMutation({
@@ -78,7 +84,9 @@ export default function SettlementsPage() {
     onSuccess: () => {
       setMarkPaidTarget(null);
       qc.invalidateQueries({ queryKey: ['settlements', activePropertyId] });
+      toast.success('Settlement marked as paid');
     },
+    onError: (e: Error) => toast.error(e.message ?? 'Failed to mark as paid'),
   });
 
   const yearOptions = Array.from({ length: 3 }, (_, i) => now.getFullYear() - i + 1);

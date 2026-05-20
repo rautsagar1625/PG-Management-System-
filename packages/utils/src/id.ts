@@ -1,3 +1,5 @@
+import { randomBytes } from 'crypto';
+
 import { RECEIPT_PREFIX, TENANT_CODE_PREFIX } from '@pg-system/constants';
 
 /**
@@ -14,16 +16,14 @@ export function generateTenantCode(): string {
 }
 
 /**
- * Generates a receipt number in the format: RCP-YYYYMM-XXXXX
+ * Generates a receipt number in the format: RCP-YYYYMM-XXXXX using crypto randomness.
  */
 export function generateReceiptNumber(date: Date = new Date()): string {
   const year = date.getFullYear();
   const month = String(date.getMonth() + 1).padStart(2, '0');
   const chars = '0123456789ABCDEFGHJKLMNPQRSTUVWXYZ';
-  let suffix = '';
-  for (let i = 0; i < 5; i++) {
-    suffix += chars[Math.floor(Math.random() * chars.length)];
-  }
+  const bytes = randomBytes(5);
+  const suffix = Array.from(bytes).map((b) => chars[b % chars.length]).join('');
   return `${RECEIPT_PREFIX}-${year}${month}-${suffix}`;
 }
 

@@ -83,41 +83,42 @@ export class SettlementsService {
       calculatedAt: new Date().toISOString(),
     };
 
-    // Upsert settlement
-    const existing = await this.prisma.settlement.findUnique({
-      where: { propertyId_month_year: { propertyId, month, year } },
+    // Use a transaction to prevent concurrent duplicate creation (race condition).
+    // We re-check status inside the transaction so two simultaneous requests
+    // cannot both pass the guard and create duplicate settlements.
+    const settlement = await this.prisma.$transaction(async (tx) => {
+      const existing = await tx.settlement.findUnique({
+        where: { propertyId_month_year: { propertyId, month, year } },
+      });
+
+      if (existing && existing.status !== SettlementStatus.CALCULATED) {
+        throw new BadRequestException(
+          `Settlement for ${month}/${year} is already ${existing.status} and cannot be recalculated`,
+        );
+      }
+
+      return tx.settlement.upsert({
+        where: { propertyId_month_year: { propertyId, month, year } },
+        create: {
+          propertyId,
+          financialModelId: financialModel.id,
+          month,
+          year,
+          totalCollected: new Prisma.Decimal(totalCollected),
+          ownerPayout: new Prisma.Decimal(ownerPayout),
+          operatorProfit: new Prisma.Decimal(operatorProfit),
+          breakdown,
+          status: SettlementStatus.CALCULATED,
+        },
+        update: {
+          totalCollected: new Prisma.Decimal(totalCollected),
+          ownerPayout: new Prisma.Decimal(ownerPayout),
+          operatorProfit: new Prisma.Decimal(operatorProfit),
+          breakdown,
+          status: SettlementStatus.CALCULATED,
+        },
+      });
     });
-
-    if (existing && existing.status !== SettlementStatus.CALCULATED) {
-      throw new BadRequestException(
-        `Settlement for ${month}/${year} is already ${existing.status} and cannot be recalculated`,
-      );
-    }
-
-    const settlement = existing
-      ? await this.prisma.settlement.update({
-          where: { id: existing.id },
-          data: {
-            totalCollected: new Prisma.Decimal(totalCollected),
-            ownerPayout: new Prisma.Decimal(ownerPayout),
-            operatorProfit: new Prisma.Decimal(operatorProfit),
-            breakdown,
-            status: SettlementStatus.CALCULATED,
-          },
-        })
-      : await this.prisma.settlement.create({
-          data: {
-            propertyId,
-            financialModelId: financialModel.id,
-            month,
-            year,
-            totalCollected: new Prisma.Decimal(totalCollected),
-            ownerPayout: new Prisma.Decimal(ownerPayout),
-            operatorProfit: new Prisma.Decimal(operatorProfit),
-            breakdown,
-            status: SettlementStatus.CALCULATED,
-          },
-        });
 
     return { success: true, data: settlement };
   }

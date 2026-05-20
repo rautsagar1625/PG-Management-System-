@@ -11,11 +11,13 @@ import {
   Alert,
   RefreshControl,
 } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { getTenantComplaints, createTenantComplaint } from '../../src/lib/tenant-api';
 import { useAsync } from '../../src/lib/hooks';
 import { formatDate } from '../../src/lib/format';
+import { colors } from '../../src/theme';
 
-const CATEGORIES = [
+const CATEGORIES: string[] = [
   'MAINTENANCE', 'PLUMBING', 'ELECTRICAL', 'HOUSEKEEPING',
   'SECURITY', 'FOOD', 'WIFI', 'NOISE', 'OTHER',
 ];
@@ -26,8 +28,8 @@ const STATUS_CONFIG: Record<string, { label: string; color: string; bg: string }
   ASSIGNED:    { label: 'Assigned',    color: '#92400e', bg: '#fef3c7' },
   IN_PROGRESS: { label: 'In Progress', color: '#1e40af', bg: '#dbeafe' },
   RESOLVED:    { label: 'Resolved',    color: '#065f46', bg: '#d1fae5' },
-  CLOSED:      { label: 'Closed',      color: '#374151', bg: '#f3f4f6' },
-  REJECTED:    { label: 'Rejected',    color: '#374151', bg: '#f3f4f6' },
+  CLOSED:      { label: 'Closed',      color: '#374151', bg: colors.gray100 },
+  REJECTED:    { label: 'Rejected',    color: '#374151', bg: colors.gray100 },
 };
 
 const PRIORITY_COLORS: Record<string, string> = {
@@ -99,14 +101,14 @@ export default function ComplaintsScreen() {
       >
         {complaints.length === 0 && !loading && (
           <View style={styles.emptyBox}>
-            <Text style={styles.emptyIcon}>📋</Text>
+            <Ionicons name="chatbubble-ellipses-outline" size={44} color="#d1d5db" style={{ marginBottom: 12 }} />
             <Text style={styles.emptyTitle}>No complaints yet</Text>
             <Text style={styles.emptyText}>Tap the + button below to raise a new complaint.</Text>
           </View>
         )}
 
         {complaints.map((c) => {
-          const sCfg = STATUS_CONFIG[c.status] ?? { label: c.status, color: '#374151', bg: '#f3f4f6' };
+          const sCfg = STATUS_CONFIG[c.status] ?? { label: c.status, color: '#374151', bg: colors.gray100 };
           const expanded = expandedId === c.id;
           return (
             <TouchableOpacity
@@ -171,8 +173,9 @@ export default function ComplaintsScreen() {
         style={styles.fab}
         onPress={() => setShowCreate(true)}
         activeOpacity={0.85}
+        accessibilityLabel="Raise new complaint"
       >
-        <Text style={styles.fabText}>+</Text>
+        <Ionicons name="add" size={28} color="#fff" />
       </TouchableOpacity>
 
       {/* Create Complaint Modal */}
@@ -260,7 +263,7 @@ export default function ComplaintsScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#f3f4f6' },
+  container: { flex: 1, backgroundColor: colors.gray100 },
   center: { paddingVertical: 60, alignItems: 'center' },
   errorBox: {
     margin: 16,
@@ -282,7 +285,6 @@ const styles = StyleSheet.create({
   list: { padding: 16, gap: 10 },
 
   emptyBox: { paddingVertical: 60, alignItems: 'center' },
-  emptyIcon: { fontSize: 40, marginBottom: 12 },
   emptyTitle: { fontSize: 16, fontWeight: '700', color: '#374151', marginBottom: 4 },
   emptyText: { fontSize: 13, color: '#9ca3af', textAlign: 'center', paddingHorizontal: 24 },
 
@@ -307,7 +309,7 @@ const styles = StyleSheet.create({
   dot: { width: 6, height: 6, borderRadius: 3 },
   priorityText: { fontSize: 11, color: '#6b7280' },
 
-  divider: { height: 1, backgroundColor: '#f3f4f6', marginVertical: 12 },
+  divider: { height: 1, backgroundColor: colors.gray100, marginVertical: 12 },
   description: { fontSize: 13, color: '#4b5563', lineHeight: 20 },
   updatesBox: { marginTop: 12, backgroundColor: '#f9fafb', borderRadius: 10, padding: 12 },
   updatesLabel: {
@@ -319,7 +321,7 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   updateItem: { marginBottom: 10 },
-  updateStatus: { fontSize: 11, fontWeight: '700', color: '#4f46e5', marginBottom: 2 },
+  updateStatus: { fontSize: 11, fontWeight: '700', color: colors.primary, marginBottom: 2 },
   updateComment: { fontSize: 13, color: '#374151', lineHeight: 18 },
   updateDate: { fontSize: 11, color: '#9ca3af', marginTop: 2 },
 
@@ -331,16 +333,15 @@ const styles = StyleSheet.create({
     width: 56,
     height: 56,
     borderRadius: 28,
-    backgroundColor: '#4f46e5',
+    backgroundColor: colors.primary,
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: '#4f46e5',
+    shadowColor: colors.primary,
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.35,
     shadowRadius: 8,
     elevation: 6,
   },
-  fabText: { color: '#fff', fontSize: 28, fontWeight: '300', lineHeight: 32, marginTop: -2 },
 
   // Modal
   modal: { flex: 1, backgroundColor: '#fff' },
@@ -357,7 +358,7 @@ const styles = StyleSheet.create({
   modalTitle: { fontSize: 17, fontWeight: '700', color: '#111827' },
   modalCancel: { fontSize: 15, color: '#6b7280', fontWeight: '500' },
   modalSubmitBtn: {
-    backgroundColor: '#4f46e5',
+    backgroundColor: colors.primary,
     paddingHorizontal: 16,
     paddingVertical: 7,
     borderRadius: 8,
@@ -391,7 +392,7 @@ const styles = StyleSheet.create({
     marginRight: 8,
     backgroundColor: '#fff',
   },
-  chipActive: { backgroundColor: '#4f46e5', borderColor: '#4f46e5' },
+  chipActive: { backgroundColor: colors.primary, borderColor: colors.primary },
   chipText: { fontSize: 12, color: '#374151', fontWeight: '500' },
   chipTextActive: { color: '#fff', fontWeight: '600' },
 });

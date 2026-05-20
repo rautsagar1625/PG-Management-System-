@@ -4,6 +4,8 @@ import { Logger } from '@nestjs/common';
 import { RentCycleStatus } from '@prisma/client';
 import { Job } from 'bullmq';
 
+import { RENT_GRACE_PERIOD_DAYS } from '@pg-system/constants';
+
 import { PrismaService } from '../../../database/prisma.service';
 import { JOB_MARK_OVERDUE, QUEUE_OVERDUE } from '../jobs.constants';
 
@@ -18,19 +20,19 @@ export class OverdueProcessor extends WorkerHost {
   async process(job: Job) {
     if (job.name !== JOB_MARK_OVERDUE) return;
 
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
+    const graceCutoff = new Date();
+    graceCutoff.setDate(graceCutoff.getDate() - RENT_GRACE_PERIOD_DAYS);
+    graceCutoff.setHours(0, 0, 0, 0);
 
-    // Mark PENDING and DUE cycles whose dueDate has passed as OVERDUE
     const result = await this.prisma.rentCycle.updateMany({
       where: {
-        status: { in: [RentCycleStatus.PENDING, RentCycleStatus.DUE] },
-        dueDate: { lt: today },
+        status: { in: [RentCycleStatus.PENDING, RentCycleStatus.DUE, RentCycleStatus.PARTIAL] },
+        dueDate: { lt: graceCutoff },
       },
       data: { status: RentCycleStatus.OVERDUE },
     });
 
     this.logger.log(`Overdue marking complete: ${result.count} cycles updated`);
-    return { markedOverdue: result.count, runAt: today.toISOString() };
+    return { markedOverdue: result.count, runAt: graceCutoff.toISOString() };
   }
 }

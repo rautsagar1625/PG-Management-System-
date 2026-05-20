@@ -25,6 +25,7 @@ export class ExportService {
   ): Promise<{ buffer: Buffer; filename: string; mimeType: string }> {
     const cycles = await this.prisma.rentCycle.findMany({
       where: { propertyId, month, year },
+      take: 10_000,
       include: {
         tenant: {
           include: {
@@ -64,6 +65,7 @@ export class ExportService {
   ): Promise<{ buffer: Buffer; filename: string; mimeType: string }> {
     const cycles = await this.prisma.rentCycle.findMany({
       where: { propertyId, status: 'OVERDUE' },
+      take: 10_000,
       include: {
         tenant: {
           include: {
@@ -103,6 +105,7 @@ export class ExportService {
   ): Promise<{ buffer: Buffer; filename: string; mimeType: string }> {
     const tenants = await this.prisma.tenant.findMany({
       where: { propertyId },
+      take: 10_000,
       include: {
         user: { select: { name: true, email: true, phone: true } },
         allocations: {
@@ -142,6 +145,7 @@ export class ExportService {
   ): Promise<{ buffer: Buffer; filename: string; mimeType: string }> {
     const settlements = await this.prisma.settlement.findMany({
       where: { propertyId, year },
+      take: 10_000,
       orderBy: [{ year: 'desc' }, { month: 'desc' }],
     });
 

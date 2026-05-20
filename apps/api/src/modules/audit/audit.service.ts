@@ -92,7 +92,8 @@ export class AuditService {
     limit?: number;
   }) {
     const { propertyId, userId, entity, action, dateFrom, dateTo, page = 1, limit = 50 } = params;
-    const skip = (page - 1) * limit;
+    const cappedLimit = Math.min(limit, 200);
+    const skip = (page - 1) * cappedLimit;
 
     const where: Prisma.AuditLogWhereInput = {
       ...(propertyId && { propertyId }),
@@ -115,7 +116,7 @@ export class AuditService {
         include: { user: { select: { id: true, name: true } } },
         orderBy: { createdAt: 'desc' },
         skip,
-        take: limit,
+        take: cappedLimit,
       }),
       this.prisma.auditLog.count({ where }),
     ]);
@@ -123,7 +124,7 @@ export class AuditService {
     return {
       success: true,
       data: logs,
-      meta: { total, page, limit, totalPages: Math.ceil(total / limit) },
+      meta: { total, page, limit: cappedLimit, totalPages: Math.ceil(total / cappedLimit) },
     };
   }
 }

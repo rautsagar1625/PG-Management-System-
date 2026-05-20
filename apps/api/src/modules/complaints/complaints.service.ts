@@ -39,6 +39,7 @@ export class ComplaintsService {
         ...(filters.status && { status: filters.status as ComplaintStatus }),
         ...(filters.category && { category: filters.category as ComplaintCategory }),
       },
+      take: 500,
       include: {
         raisedByUser: { select: { id: true, name: true } },
         assignedToUser: { select: { id: true, name: true } },

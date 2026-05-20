@@ -6,7 +6,7 @@
   *,
   *::before,
   *::after {
-    @apply border-gray-200;
+    @apply border-gray-200 dark:border-gray-700;
   }
 
   html {
@@ -16,12 +16,12 @@
   }
 
   body {
-    @apply bg-gray-50 text-gray-900;
+    @apply bg-gray-50 text-gray-900 dark:bg-gray-950 dark:text-gray-100;
     font-feature-settings: 'cv02', 'cv03', 'cv04', 'cv11';
   }
 
   ::selection {
-    @apply bg-primary-100 text-primary-900;
+    @apply bg-primary-100 text-primary-900 dark:bg-primary-800 dark:text-primary-100;
   }
 
   /* Custom scrollbar */
@@ -33,10 +33,10 @@
     @apply bg-transparent;
   }
   ::-webkit-scrollbar-thumb {
-    @apply bg-gray-200 rounded-full;
+    @apply bg-gray-200 rounded-full dark:bg-gray-700;
   }
   ::-webkit-scrollbar-thumb:hover {
-    @apply bg-gray-300;
+    @apply bg-gray-300 dark:bg-gray-600;
   }
 }
 
@@ -45,6 +45,7 @@
   .btn-primary {
     @apply inline-flex items-center justify-center gap-2
            bg-primary-600 hover:bg-primary-700 active:bg-primary-800
+           dark:bg-primary-500 dark:hover:bg-primary-600 dark:active:bg-primary-700
            text-white text-sm font-semibold
            px-4 py-2 rounded-lg
            shadow-sm hover:shadow
@@ -55,9 +56,10 @@
   .btn-secondary {
     @apply inline-flex items-center justify-center gap-2
            bg-white hover:bg-gray-50 active:bg-gray-100
-           text-gray-700 text-sm font-semibold
+           dark:bg-gray-800 dark:hover:bg-gray-700 dark:active:bg-gray-600
+           text-gray-700 dark:text-gray-200 text-sm font-semibold
            px-4 py-2 rounded-lg
-           border border-gray-300 shadow-sm
+           border border-gray-300 dark:border-gray-600 shadow-sm
            transition-all duration-150
            disabled:opacity-50 disabled:cursor-not-allowed;
   }
@@ -65,7 +67,9 @@
   .btn-ghost {
     @apply inline-flex items-center justify-center gap-2
            bg-transparent hover:bg-gray-100 active:bg-gray-200
-           text-gray-600 hover:text-gray-900 text-sm font-medium
+           dark:hover:bg-gray-800 dark:active:bg-gray-700
+           text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-100
+           text-sm font-medium
            px-3 py-1.5 rounded-lg
            transition-all duration-150;
   }
@@ -81,22 +85,30 @@
 
   /* ── Form controls ───────────────────────────── */
   .input-field {
-    @apply w-full bg-white
-           rounded-lg border border-gray-300
-           px-3 py-2 text-sm text-gray-900 placeholder:text-gray-400
+    @apply w-full
+           bg-white dark:bg-gray-800
+           rounded-lg border border-gray-300 dark:border-gray-600
+           px-3 py-2 text-sm text-gray-900 dark:text-gray-100
+           placeholder:text-gray-400 dark:placeholder:text-gray-500
            shadow-sm
            focus:outline-none focus:ring-2 focus:ring-primary-500/30 focus:border-primary-500
+           dark:focus:ring-primary-400/30 dark:focus:border-primary-400
            transition-shadow duration-150
-           disabled:bg-gray-50 disabled:text-gray-500 disabled:cursor-not-allowed;
+           disabled:bg-gray-50 dark:disabled:bg-gray-900
+           disabled:text-gray-500 disabled:cursor-not-allowed;
   }
 
   /* ── Cards ───────────────────────────────────── */
   .card {
-    @apply bg-white rounded-xl border border-gray-200 shadow-card;
+    @apply bg-white dark:bg-gray-800/80
+           rounded-xl border border-gray-200 dark:border-gray-700
+           shadow-card;
   }
 
   .card-hover {
-    @apply card hover:shadow-card-hover hover:-translate-y-px transition-all duration-200 cursor-pointer;
+    @apply card hover:shadow-card-hover hover:-translate-y-px
+           dark:hover:bg-gray-800
+           transition-all duration-200 cursor-pointer;
   }
 
   /* ── Badges ──────────────────────────────────── */
@@ -106,6 +118,7 @@
 
   /* ── Section divider ─────────────────────────── */
   .section-label {
-    @apply text-[10px] font-semibold uppercase tracking-widest text-gray-400 px-3 mb-1;
+    @apply text-[10px] font-semibold uppercase tracking-widest
+           text-gray-400 dark:text-gray-500 px-3 mb-1;
   }
 }

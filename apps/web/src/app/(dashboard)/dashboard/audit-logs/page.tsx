@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { keepPreviousData } from '@tanstack/react-query';
 import { Search, Building2, ChevronDown, ChevronLeft, ChevronRight, Shield } from 'lucide-react';
@@ -38,13 +38,13 @@ export default function AuditLogsPage() {
   const { data: properties = [] } = useQuery({
     queryKey: ['properties'],
     queryFn: getProperties,
-    select: (data) => {
-      if (data.length > 0 && !propertyId) {
-        setTimeout(() => setPropertyId((prev) => prev || data[0]!.id), 0);
-      }
-      return data;
-    },
   });
+
+  useEffect(() => {
+    if (properties.length > 0 && !propertyId) {
+      setPropertyId(properties[0]!.id);
+    }
+  }, [properties, propertyId]);
 
   const activePropertyId = propertyId || properties[0]?.id || '';
 

@@ -168,12 +168,11 @@ export async function getTenants(params: {
   page?: number;
   limit?: number;
 }): Promise<PaginatedTenants> {
-  const { data } = await apiClient.get<{ success: boolean; data: PaginatedTenants; meta: PaginatedTenants['meta'] }>(
+  const { data } = await apiClient.get<{ success: boolean; data: Tenant[]; meta: PaginatedTenants['meta'] }>(
     '/tenants',
     { params },
   );
-  // Handle both envelope formats
-  return data.data ?? ({ tenants: (data as unknown as { data: Tenant[] }).data, meta: { total: 0, page: 1, limit: 20, totalPages: 1 } });
+  return { tenants: data.data ?? [], meta: data.meta ?? { total: 0, page: 1, limit: 20, totalPages: 1 } };
 }
 
 export async function getTenant(id: string): Promise<TenantDetail> {

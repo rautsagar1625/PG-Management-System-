@@ -112,8 +112,8 @@ model PropertyRole {
   createdAt  DateTime         @default(now())
   updatedAt  DateTime         @updatedAt
 
-  property Property @relation(fields: [propertyId], references: [id])
-  user     User     @relation(fields: [userId], references: [id])
+  property Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([propertyId, userId])
   @@index([propertyId])
@@ -156,7 +156,7 @@ model Room {
   createdAt       DateTime   @default(now())
   updatedAt       DateTime   @updatedAt
 
-  property Property @relation(fields: [propertyId], references: [id])
+  property Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
   beds     Bed[]
 
   @@unique([propertyId, number])
@@ -172,7 +172,7 @@ model Bed {
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
 
-  room        Room               @relation(fields: [roomId], references: [id])
+  room        Room               @relation(fields: [roomId], references: [id], onDelete: Cascade)
   allocations TenantAllocation[]
 
   @@unique([roomId, label])
@@ -231,7 +231,7 @@ model Tenant {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  user              User               @relation(fields: [userId], references: [id])
+  user              User               @relation(fields: [userId], references: [id], onDelete: Restrict)
   property          Property           @relation(fields: [propertyId], references: [id])
   allocations       TenantAllocation[]
   documents         TenantDocument[]
@@ -269,7 +269,7 @@ model TenantAllocation {
   createdAt   DateTime         @default(now())
   updatedAt   DateTime         @updatedAt
 
-  tenant Tenant @relation(fields: [tenantId], references: [id])
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   bed    Bed    @relation(fields: [bedId], references: [id])
 
   @@index([tenantId, isActive])
@@ -292,7 +292,7 @@ model TenantDocument {
   verifiedBy     String?      // userId
   createdAt      DateTime     @default(now())
 
-  tenant Tenant @relation(fields: [tenantId], references: [id])
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
   @@index([tenantId])
 }
@@ -305,7 +305,7 @@ model EmergencyContact {
   relation  String
   createdAt DateTime @default(now())
 
-  tenant Tenant @relation(fields: [tenantId], references: [id])
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
   @@index([tenantId])
 }
@@ -398,6 +398,7 @@ model RentCycle {
   @@unique([tenantId, month, year])
   @@index([propertyId, month, year])
   @@index([tenantId, status])
+  @@index([status, dueDate])
   @@index([dueDate])
 }
 
@@ -422,8 +423,9 @@ model Payment {
   receipt   Receipt?
 
   @@index([tenantId])
-  @@index([propertyId, paidAt])
+  @@index([propertyId, type, paidAt])
   @@index([rentCycleId])
+  @@index([referenceNo])
 }
 
 // Immutable once created. Receipt number is the human-readable reference.
@@ -545,7 +547,7 @@ model ComplaintUpdate {
   statusChange String?  // Human-readable: "OPEN → ASSIGNED"
   createdAt    DateTime @default(now())
 
-  complaint Complaint @relation(fields: [complaintId], references: [id])
+  complaint Complaint @relation(fields: [complaintId], references: [id], onDelete: Cascade)
   user      User      @relation(fields: [updatedBy], references: [id])
 
   @@index([complaintId])
@@ -616,7 +618,7 @@ model Notification {
   readAt     DateTime?
   createdAt  DateTime         @default(now())
 
-  user     User      @relation(fields: [userId], references: [id])
+  user     User      @relation(fields: [userId], references: [id], onDelete: Cascade)
   property Property? @relation(fields: [propertyId], references: [id])
 
   @@index([userId, isRead])

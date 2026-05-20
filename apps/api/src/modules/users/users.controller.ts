@@ -1,5 +1,6 @@
-import { Controller, Get, Query, UseGuards } from '@nestjs/common';
+import { BadRequestException, Controller, Get, Query, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
+import { Throttle } from '@nestjs/throttler';
 
 import type { RequestContext } from '@pg-system/types';
 
@@ -22,7 +23,11 @@ export class UsersController {
 
   @Get('search')
   @ApiOperation({ summary: 'Search users by name/email/phone (for adding to property)' })
+  @Throttle({ default: { limit: 10, ttl: 60_000 } })
   search(@Query('q') query: string) {
-    return this.usersService.search(query);
+    if (!query || query.trim().length < 2) {
+      throw new BadRequestException('Search query must be at least 2 characters');
+    }
+    return this.usersService.search(query.trim());
   }
 }

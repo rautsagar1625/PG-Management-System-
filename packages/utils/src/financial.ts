@@ -1,47 +1,76 @@
 /**
- * Calculates the owner payout and operator profit for a FIXED_PAYOUT financial model.
- * If total collected < fixed payout, owner still gets the fixed amount (operator is in deficit).
+ * All monetary calculations use integer paise (1 INR = 100 paise) internally
+ * to avoid IEEE 754 floating-point precision loss.
+ *
+ * Inputs and outputs are plain JS numbers representing rupee amounts with up
+ * to 2 decimal places. The Prisma layer is responsible for storing as Decimal.
+ */
+
+function toPaise(rupees: number): number {
+  return Math.round(rupees * 100);
+}
+
+function toRupees(paise: number): number {
+  return paise / 100;
+}
+
+/**
+ * Calculates the owner payout and operator profit for a FIXED_PAYOUT model.
+ * If total collected < fixed payout, operator absorbs the deficit (negative profit).
  */
 export function calculateFixedPayoutSettlement(
   totalCollected: number,
   fixedOwnerPayout: number,
 ): { ownerPayout: number; operatorProfit: number } {
-  const ownerPayout = fixedOwnerPayout;
-  const operatorProfit = totalCollected - fixedOwnerPayout;
+  const collectedPaise = toPaise(totalCollected);
+  const payoutPaise = toPaise(fixedOwnerPayout);
+  const ownerPayout = toRupees(payoutPaise);
+  const operatorProfit = toRupees(collectedPaise - payoutPaise);
   return { ownerPayout, operatorProfit };
 }
 
 /**
- * Calculates owner and operator shares for a REVENUE_SHARE financial model.
+ * Calculates owner and operator shares for a REVENUE_SHARE model.
+ * ownerSharePercent + operatorSharePercent must equal 100.
  */
 export function calculateRevenueShareSettlement(
   totalCollected: number,
   ownerSharePercent: number,
   operatorSharePercent: number,
 ): { ownerPayout: number; operatorProfit: number } {
-  const ownerPayout = roundToTwoDecimals((totalCollected * ownerSharePercent) / 100);
-  const operatorProfit = roundToTwoDecimals((totalCollected * operatorSharePercent) / 100);
-  return { ownerPayout, operatorProfit };
+  if (Math.abs(ownerSharePercent + operatorSharePercent - 100) > 0.001) {
+    throw new Error(
+      `Share percentages must sum to 100, got ${ownerSharePercent + operatorSharePercent}`,
+    );
+  }
+  const collectedPaise = toPaise(totalCollected);
+  const ownerPaise = Math.round((collectedPaise * ownerSharePercent) / 100);
+  // Assign remainder to operator to guarantee exact sum
+  const operatorPaise = collectedPaise - ownerPaise;
+  return {
+    ownerPayout: toRupees(ownerPaise),
+    operatorProfit: toRupees(operatorPaise),
+  };
 }
 
 /**
- * Rounds a number to 2 decimal places (safe for currency display).
- * For storage, always use Prisma Decimal type.
+ * Rounds a rupee amount to 2 decimal places (paise precision).
+ * Prefer integer arithmetic above; use this only for display/output.
  */
 export function roundToTwoDecimals(value: number): number {
-  return Math.round(value * 100) / 100;
+  return toRupees(toPaise(value));
 }
 
 /**
- * Calculates the balance due after a partial payment.
- * Returns 0 if paidAmount >= rentAmount (never negative).
+ * Calculates the balance due after a partial payment. Never negative.
  */
 export function calculateBalanceDue(rentAmount: number, paidAmount: number): number {
-  return Math.max(0, roundToTwoDecimals(rentAmount - paidAmount));
+  const balancePaise = toPaise(rentAmount) - toPaise(paidAmount);
+  return toRupees(Math.max(0, balancePaise));
 }
 
 /**
- * Calculates occupancy rate as a percentage (0-100).
+ * Calculates occupancy rate as a percentage (0–100).
  */
 export function calculateOccupancyRate(occupiedBeds: number, totalBeds: number): number {
   if (totalBeds === 0) return 0;

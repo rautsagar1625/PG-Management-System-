@@ -1,13 +1,35 @@
 import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { FinancialModelType, Prisma } from '@prisma/client';
+import { IsDateString, IsEnum, IsNumber, IsOptional, Max, Min } from 'class-validator';
+import { Type } from 'class-transformer';
 
 import { PrismaService } from '../../database/prisma.service';
 
-export interface SetFinancialModelDto {
+export class SetFinancialModelDto {
+  @IsEnum(FinancialModelType)
   type: FinancialModelType;
+
+  @IsNumber()
+  @Min(0)
+  @IsOptional()
+  @Type(() => Number)
   fixedOwnerPayout?: number;
+
+  @IsNumber()
+  @Min(0)
+  @Max(100)
+  @IsOptional()
+  @Type(() => Number)
   ownerSharePercent?: number;
+
+  @IsNumber()
+  @Min(0)
+  @Max(100)
+  @IsOptional()
+  @Type(() => Number)
   operatorSharePercent?: number;
+
+  @IsDateString()
   effectiveFrom: string;
 }
 
@@ -69,7 +91,7 @@ export class FinancialService {
           'ownerSharePercent and operatorSharePercent are required for REVENUE_SHARE',
         );
       }
-      if (dto.ownerSharePercent + dto.operatorSharePercent !== 100) {
+      if (Math.abs(dto.ownerSharePercent + dto.operatorSharePercent - 100) > 0.001) {
         throw new BadRequestException('Share percentages must sum to 100');
       }
     }

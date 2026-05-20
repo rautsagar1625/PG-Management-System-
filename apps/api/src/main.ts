@@ -46,7 +46,15 @@ async function bootstrap() {
   const apiPrefix = config.get<string>('API_PREFIX', 'api/v1');
 
   // eslint-disable-next-line @typescript-eslint/no-require-imports
-  await app.register(require('@fastify/helmet'), { contentSecurityPolicy: false });
+  await app.register(require('@fastify/helmet'), {
+    contentSecurityPolicy: {
+      directives: {
+        defaultSrc: ["'none'"],
+        frameAncestors: ["'none'"],
+      },
+    },
+    crossOriginEmbedderPolicy: true,
+  });
 
   app.setGlobalPrefix(apiPrefix);
 
@@ -74,8 +82,10 @@ async function bootstrap() {
     SwaggerModule.setup('docs', app, document);
   }
 
+  const rawCorsOrigin = config.get<string>('CORS_ORIGIN', 'http://localhost:3000');
+  const corsOrigins = rawCorsOrigin.split(',').map((o) => o.trim());
   app.enableCors({
-    origin: config.get<string>('CORS_ORIGIN', 'http://localhost:3000'),
+    origin: corsOrigins.length === 1 ? corsOrigins[0] : corsOrigins,
     credentials: true,
   });
 

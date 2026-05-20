@@ -1,6 +1,7 @@
 import { Controller, Get, Param, Res, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 
+import { PropertyRoles } from '../../common/decorators/roles.decorator';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { PdfService } from './pdf.service';
 
@@ -18,6 +19,7 @@ export class PdfController {
 
   @Get('receipt/:receiptNo')
   @ApiOperation({ summary: 'Generate receipt PDF' })
+  @PropertyRoles('OWNER', 'OPERATOR', 'CO_OPERATOR', 'STAFF')
   async receipt(@Param('receiptNo') receiptNo: string, @Res() reply: FReply) {
     const buffer = await this.pdfService.generateReceipt(receiptNo);
     reply
@@ -28,6 +30,7 @@ export class PdfController {
 
   @Get('settlement/:id')
   @ApiOperation({ summary: 'Generate settlement summary PDF' })
+  @PropertyRoles('OWNER', 'OPERATOR')
   async settlementSummary(@Param('id') id: string, @Res() reply: FReply) {
     const buffer = await this.pdfService.generateSettlementSummary(id);
     reply
