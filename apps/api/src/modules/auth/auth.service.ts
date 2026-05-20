@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   ConflictException,
   Injectable,
   UnauthorizedException,
@@ -6,11 +7,13 @@ import {
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcryptjs';
+import { randomBytes } from 'crypto';
 
 import type { AuthResponse, AuthTokenPayload, AuthTokens, UserProfile } from '@pg-system/types';
 
 import { PrismaService } from '../../database/prisma.service';
-import type { LoginDto, RegisterDto } from './dto/auth.dto';
+import { EmailService } from '../email/email.service';
+import type { ForgotPasswordDto, LoginDto, RegisterDto, ResetPasswordDto } from './dto/auth.dto';
 
 @Injectable()
 export class AuthService {
@@ -18,6 +21,7 @@ export class AuthService {
     private prisma: PrismaService,
     private jwt: JwtService,
     private config: ConfigService,
+    private email: EmailService,
   ) {}
 
   async register(dto: RegisterDto): Promise<AuthResponse> {
@@ -97,6 +101,37 @@ export class AuthService {
       where: { token: refreshToken },
       data: { revokedAt: new Date() },
     });
+  }
+
+  async forgotPassword(dto: ForgotPasswordDto): Promise<void> {
+    const user = await this.prisma.user.findUnique({ where: { email: dto.email } });
+    // Always return success to avoid user enumeration
+    if (!user || !user.isActive) return;
+
+    const token = randomBytes(32).toString('hex');
+    const expiresAt = new Date(Date.now() + 60 * 60 * 1000); // 1 hour
+
+    await this.prisma.passwordReset.create({ data: { userId: user.id, token, expiresAt } });
+    await this.email.sendPasswordReset(user.email, user.name, token);
+  }
+
+  async resetPassword(dto: ResetPasswordDto): Promise<void> {
+    const record = await this.prisma.passwordReset.findUnique({ where: { token: dto.token } });
+    if (!record || record.usedAt || record.expiresAt < new Date()) {
+      throw new BadRequestException('Invalid or expired reset token');
+    }
+
+    const passwordHash = await bcrypt.hash(dto.password, 12);
+
+    await this.prisma.$transaction([
+      this.prisma.user.update({ where: { id: record.userId }, data: { passwordHash } }),
+      this.prisma.passwordReset.update({ where: { id: record.id }, data: { usedAt: new Date() } }),
+      // Revoke all active sessions so old sessions are invalidated
+      this.prisma.session.updateMany({
+        where: { userId: record.userId, revokedAt: null },
+        data: { revokedAt: new Date() },
+      }),
+    ]);
   }
 
   private async generateTokens(

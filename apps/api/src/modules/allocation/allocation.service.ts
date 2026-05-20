@@ -3,7 +3,7 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { AllocationReason, BedStatus, Prisma, RoomStatus } from '@prisma/client';
+import { AllocationReason, BedStatus, Prisma, RoomStatus, TransferReason } from '@prisma/client';
 
 import { PrismaService } from '../../database/prisma.service';
 import { AuditService } from '../audit/audit.service';
@@ -14,6 +14,7 @@ export interface CreateAllocationParams {
   startDate: Date;
   monthlyRent: Prisma.Decimal | number;
   reason?: AllocationReason;
+  transferReason?: TransferReason;
   notes?: string;
 }
 
@@ -41,6 +42,7 @@ export class AllocationService {
       startDate,
       monthlyRent,
       reason = AllocationReason.INITIAL,
+      transferReason,
       notes,
     } = params;
 
@@ -76,6 +78,7 @@ export class AllocationService {
         startDate,
         monthlyRent: new Prisma.Decimal(Number(monthlyRent)),
         reason,
+        transferReason: transferReason ?? null,
         notes,
         isActive: true,
       },
@@ -147,6 +150,7 @@ export class AllocationService {
     newBedId: string,
     transferDate: Date,
     newMonthlyRent?: number,
+    transferReason?: TransferReason,
     notes?: string,
   ) {
     const currentAlloc = await tx.tenantAllocation.findFirst({
@@ -170,6 +174,7 @@ export class AllocationService {
       startDate: transferDate,
       monthlyRent: rentToUse,
       reason: AllocationReason.TRANSFER,
+      transferReason,
       notes,
     });
   }

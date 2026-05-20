@@ -100,7 +100,7 @@ export default function ProfileScreen() {
   const { data: profile, loading, error, refetch } = useAsync(getTenantProfile, []);
 
   const initials = profile?.user.name
-    .split(' ')
+    ?.split(' ')
     .map((n) => n[0])
     .join('')
     .slice(0, 2)

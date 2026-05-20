@@ -2,6 +2,8 @@ export const PROPERTY_STATUSES = {
   ACTIVE: 'ACTIVE',
   INACTIVE: 'INACTIVE',
   SETUP: 'SETUP',
+  UNDER_MAINTENANCE: 'UNDER_MAINTENANCE',
+  CLOSED: 'CLOSED',
 } as const;
 
 export const PROPERTY_TYPES = {
@@ -39,6 +41,7 @@ export const BED_STATUSES = {
   OCCUPIED: 'OCCUPIED',
   RESERVED: 'RESERVED',
   UNDER_MAINTENANCE: 'UNDER_MAINTENANCE',
+  BLOCKED: 'BLOCKED',
 } as const;
 
 export const TENANT_STATUSES = {
@@ -46,29 +49,34 @@ export const TENANT_STATUSES = {
   VISIT_SCHEDULED: 'VISIT_SCHEDULED',
   VISITED: 'VISITED',
   ROOM_FINALIZED: 'ROOM_FINALIZED',
-  DEPOSIT_PENDING: 'DEPOSIT_PENDING',
-  KYC_PENDING: 'KYC_PENDING',
+  PENDING_COMPLIANCE: 'PENDING_COMPLIANCE', // deposit/kyc/agreement tracked via boolean flags
+  DEPOSIT_PENDING: 'DEPOSIT_PENDING',        // @deprecated
+  KYC_PENDING: 'KYC_PENDING',               // @deprecated
   ACTIVE: 'ACTIVE',
   NOTICE_PERIOD: 'NOTICE_PERIOD',
   MOVED_OUT: 'MOVED_OUT',
+  ARCHIVED: 'ARCHIVED',
   REJECTED: 'REJECTED',
 } as const;
 
 /**
- * Valid status transitions for tenant onboarding workflow.
- * Each key maps to the allowed next statuses.
+ * Valid status transitions for tenant lifecycle.
+ * PENDING_COMPLIANCE is the unified pre-active compliance state.
+ * DEPOSIT_PENDING and KYC_PENDING are kept for backward compatibility only.
  */
 export const TENANT_STATUS_TRANSITIONS: Record<string, string[]> = {
-  LEAD: ['VISIT_SCHEDULED', 'REJECTED'],
-  VISIT_SCHEDULED: ['VISITED', 'LEAD', 'REJECTED'],
-  VISITED: ['ROOM_FINALIZED', 'REJECTED'],
-  ROOM_FINALIZED: ['ACTIVE', 'DEPOSIT_PENDING', 'KYC_PENDING', 'VISITED'],
-  DEPOSIT_PENDING: ['ACTIVE', 'KYC_PENDING', 'ROOM_FINALIZED'],
-  KYC_PENDING: ['ACTIVE', 'DEPOSIT_PENDING'],
-  ACTIVE: ['NOTICE_PERIOD'],
-  NOTICE_PERIOD: ['MOVED_OUT'],
-  MOVED_OUT: [],
-  REJECTED: [],
+  LEAD:                ['VISIT_SCHEDULED', 'REJECTED'],
+  VISIT_SCHEDULED:     ['VISITED', 'LEAD', 'REJECTED'],
+  VISITED:             ['ROOM_FINALIZED', 'REJECTED'],
+  ROOM_FINALIZED:      ['PENDING_COMPLIANCE', 'ACTIVE', 'DEPOSIT_PENDING', 'KYC_PENDING', 'VISITED'],
+  PENDING_COMPLIANCE:  ['ACTIVE'],
+  DEPOSIT_PENDING:     ['ACTIVE', 'KYC_PENDING', 'PENDING_COMPLIANCE', 'ROOM_FINALIZED'],
+  KYC_PENDING:         ['ACTIVE', 'DEPOSIT_PENDING', 'PENDING_COMPLIANCE'],
+  ACTIVE:              ['NOTICE_PERIOD'],
+  NOTICE_PERIOD:       ['MOVED_OUT', 'ACTIVE'],   // allow cancelling notice
+  MOVED_OUT:           ['ARCHIVED'],
+  ARCHIVED:            [],
+  REJECTED:            [],
 };
 
 export const KYC_STATUSES = {
@@ -104,9 +112,24 @@ export const COMPLAINT_STATUSES = {
   ASSIGNED: 'ASSIGNED',
   IN_PROGRESS: 'IN_PROGRESS',
   RESOLVED: 'RESOLVED',
+  REOPENED: 'REOPENED',
   CLOSED: 'CLOSED',
   REJECTED: 'REJECTED',
 } as const;
+
+/**
+ * Valid transitions for complaint workflow.
+ * REOPENED re-enters the active workflow from RESOLVED.
+ */
+export const COMPLAINT_STATUS_TRANSITIONS: Record<string, string[]> = {
+  OPEN:        ['ASSIGNED', 'IN_PROGRESS', 'REJECTED', 'CLOSED'],
+  ASSIGNED:    ['IN_PROGRESS', 'RESOLVED', 'REJECTED'],
+  IN_PROGRESS: ['RESOLVED', 'CLOSED', 'REJECTED'],
+  RESOLVED:    ['REOPENED', 'CLOSED'],
+  REOPENED:    ['ASSIGNED', 'IN_PROGRESS', 'RESOLVED', 'CLOSED'],
+  CLOSED:      [],
+  REJECTED:    [],
+};
 
 export const PRIORITY_LEVELS = {
   LOW: 'LOW',
@@ -121,3 +144,14 @@ export const PRIORITY_WEIGHT: Record<string, number> = {
   HIGH: 3,
   URGENT: 4,
 };
+
+export const TRANSFER_REASONS = {
+  TENANT_REQUEST:    'TENANT_REQUEST',
+  UPGRADE:           'UPGRADE',
+  DOWNGRADE:         'DOWNGRADE',
+  MAINTENANCE:       'MAINTENANCE',
+  ROOMMATE_CONFLICT: 'ROOMMATE_CONFLICT',
+  OPERATOR_DECISION: 'OPERATOR_DECISION',
+  OTHER:             'OTHER',
+} as const;
+

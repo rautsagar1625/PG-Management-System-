@@ -27,6 +27,11 @@ export class UsersService {
     return { success: true, data: user };
   }
 
+  async registerPushToken(userId: string, token: string | null) {
+    await this.prisma.user.update({ where: { id: userId }, data: { expoPushToken: token } });
+    return { success: true };
+  }
+
   async search(query: string) {
     const users = await this.prisma.user.findMany({
       where: {

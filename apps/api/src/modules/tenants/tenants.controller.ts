@@ -105,4 +105,25 @@ export class TenantsController {
   roomTransfer(@Param('id') id: string, @Body() dto: RoomTransferDto) {
     return this.workflowService.roomTransfer(id, dto);
   }
+
+  @Get(':id/move-out-preview')
+  @ApiOperation({ summary: 'Preview move-out settlement: pending dues and deposit balance' })
+  @PropertyRoles('OWNER', 'OPERATOR', 'CO_OPERATOR')
+  getMoveOutPreview(@Param('id') id: string) {
+    return this.workflowService.getMoveOutPreview(id);
+  }
+
+  @Put(':id/cancel-notice')
+  @ApiOperation({ summary: 'Cancel notice period and reinstate tenant as active' })
+  @PropertyRoles('OWNER', 'OPERATOR', 'CO_OPERATOR')
+  cancelNotice(@Param('id') id: string) {
+    return this.workflowService.cancelNotice(id);
+  }
+
+  @Put(':id/archive')
+  @ApiOperation({ summary: 'Archive a moved-out tenant record' })
+  @PropertyRoles('OWNER', 'OPERATOR')
+  archive(@Param('id') id: string) {
+    return this.workflowService.archive(id);
+  }
 }

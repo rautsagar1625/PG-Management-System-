@@ -9,7 +9,7 @@ export interface CreateRoomDto {
   floor?: number;
   type: RoomType;
   sharingCapacity: number;
-  monthlyRent: number;
+  baseRent: number;
   amenities?: string[];
 }
 
@@ -45,7 +45,7 @@ export class RoomsService {
           floor: dto.floor,
           type: dto.type,
           sharingCapacity: dto.sharingCapacity,
-          monthlyRent: new Prisma.Decimal(dto.monthlyRent),
+          baseRent: new Prisma.Decimal(dto.baseRent),
           amenities: dto.amenities ?? [],
         },
       });

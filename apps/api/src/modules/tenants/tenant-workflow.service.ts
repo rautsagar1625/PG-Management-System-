@@ -4,12 +4,14 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
+import { EventEmitter2 } from '@nestjs/event-emitter';
 import {
   BedStatus,
   DepositStatus,
   KycStatus,
   Prisma,
   TenantStatus,
+  TransferReason,
 } from '@prisma/client';
 import {
   IsBoolean,
@@ -26,6 +28,14 @@ import { TENANT_STATUS_TRANSITIONS } from '@pg-system/constants';
 
 import { PrismaService } from '../../database/prisma.service';
 import { AllocationService } from '../allocation/allocation.service';
+import {
+  DOMAIN_EVENTS,
+  TenantMovedInEvent,
+  TenantMovedOutEvent,
+  TenantNoticeInitiatedEvent,
+  TenantNoticeCancelledEvent,
+  TenantTransferredEvent,
+} from '../../events/domain-events';
 
 export class ScheduleVisitDto {
   @IsDateString()
@@ -96,6 +106,10 @@ export class RoomTransferDto {
 
   @IsString()
   @IsOptional()
+  transferReason?: TransferReason;
+
+  @IsString()
+  @IsOptional()
   notes?: string;
 }
 
@@ -104,6 +118,7 @@ export class TenantWorkflowService {
   constructor(
     private prisma: PrismaService,
     private allocation: AllocationService,
+    private eventEmitter: EventEmitter2,
   ) {}
 
   async scheduleVisit(tenantId: string, visitDate: string, notes?: string) {
@@ -189,7 +204,7 @@ export class TenantWorkflowService {
 
     // moveIn is valid from any of these pre-active states
     if (
-      !['ROOM_FINALIZED', 'KYC_PENDING', 'DEPOSIT_PENDING'].includes(
+      !['ROOM_FINALIZED', 'PENDING_COMPLIANCE', 'KYC_PENDING', 'DEPOSIT_PENDING'].includes(
         tenant.status,
       )
     ) {
@@ -198,7 +213,7 @@ export class TenantWorkflowService {
       );
     }
 
-    return this.prisma.$transaction(async (tx) => {
+    const result = await this.prisma.$transaction(async (tx) => {
       await this.allocation.createInitialAllocation(tx, {
         tenantId,
         bedId: dto.bedId,
@@ -206,15 +221,15 @@ export class TenantWorkflowService {
         monthlyRent: dto.monthlyRent,
       });
 
-      const targetStatus = this.resolveMoveInStatus(
-        dto.depositPaid,
-        dto.kycSubmitted,
-      );
+      const { status: targetStatus, depositCompleted, kycCompleted } =
+        this.resolveMoveInStatus(dto.depositPaid, dto.kycSubmitted);
 
       return tx.tenant.update({
         where: { id: tenantId },
         data: {
           status: targetStatus,
+          depositCompleted,
+          kycCompleted,
           moveInDate: new Date(dto.moveInDate),
           depositAmount: new Prisma.Decimal(dto.depositAmount),
           depositBalance: dto.depositPaid
@@ -227,19 +242,64 @@ export class TenantWorkflowService {
         },
       });
     });
+
+    this.eventEmitter.emit(DOMAIN_EVENTS.TENANT_MOVED_IN, {
+      tenantId,
+      tenantUserId: tenant.user.id,
+      propertyId: tenant.propertyId,
+      bedId: dto.bedId,
+    } satisfies TenantMovedInEvent);
+
+    return result;
+  }
+
+  async cancelNotice(tenantId: string) {
+    const tenant = await this.getTenant(tenantId);
+    this.assertValidTransition(tenant.status, TenantStatus.ACTIVE);
+
+    const result = await this.prisma.tenant.update({
+      where: { id: tenantId },
+      data: { status: TenantStatus.ACTIVE, noticeDate: null },
+    });
+
+    this.eventEmitter.emit(DOMAIN_EVENTS.TENANT_NOTICE_CANCELLED, {
+      tenantId,
+      tenantUserId: tenant.user.id,
+      propertyId: tenant.propertyId,
+    } satisfies TenantNoticeCancelledEvent);
+
+    return result;
+  }
+
+  async archive(tenantId: string) {
+    const tenant = await this.getTenant(tenantId);
+    this.assertValidTransition(tenant.status, TenantStatus.ARCHIVED);
+
+    return this.prisma.tenant.update({
+      where: { id: tenantId },
+      data: {
+        status: TenantStatus.ARCHIVED,
+        archivedAt: new Date(),
+      },
+    });
   }
 
   async initiateNotice(tenantId: string) {
     const tenant = await this.getTenant(tenantId);
     this.assertValidTransition(tenant.status, TenantStatus.NOTICE_PERIOD);
 
-    return this.prisma.tenant.update({
+    const result = await this.prisma.tenant.update({
       where: { id: tenantId },
-      data: {
-        status: TenantStatus.NOTICE_PERIOD,
-        noticeDate: new Date(),
-      },
+      data: { status: TenantStatus.NOTICE_PERIOD, noticeDate: new Date() },
     });
+
+    this.eventEmitter.emit(DOMAIN_EVENTS.TENANT_NOTICE_INITIATED, {
+      tenantId,
+      tenantUserId: tenant.user.id,
+      propertyId: tenant.propertyId,
+    } satisfies TenantNoticeInitiatedEvent);
+
+    return result;
   }
 
   async moveOut(tenantId: string, dto: MoveOutDto, recordedBy: string) {
@@ -310,6 +370,13 @@ export class TenantWorkflowService {
       return { result: updated, pendingDues: dues };
     });
 
+    this.eventEmitter.emit(DOMAIN_EVENTS.TENANT_MOVED_OUT, {
+      tenantId,
+      tenantUserId: tenant.user.id,
+      propertyId: tenant.propertyId,
+      moveOutDate: new Date(dto.moveOutDate),
+    } satisfies TenantMovedOutEvent);
+
     return {
       tenant: result,
       pendingDuesSummary: {
@@ -356,8 +423,13 @@ export class TenantWorkflowService {
       );
     }
 
-    return this.prisma.$transaction(async (tx) => {
-      // Re-check availability inside transaction to prevent race conditions
+    // Capture current bed before the transaction closes the allocation
+    const currentAlloc = await this.prisma.tenantAllocation.findFirst({
+      where: { tenantId, isActive: true },
+      select: { bedId: true },
+    });
+
+    const result = await this.prisma.$transaction(async (tx) => {
       const bedInTx = await tx.bed.findUnique({
         where: { id: dto.newBedId },
         select: { status: true },
@@ -372,11 +444,82 @@ export class TenantWorkflowService {
         dto.newBedId,
         new Date(dto.transferDate),
         dto.newMonthlyRent,
+        dto.transferReason,
         dto.notes,
       );
 
       return tx.tenant.findUnique({ where: { id: tenantId } });
     });
+
+    this.eventEmitter.emit(DOMAIN_EVENTS.TENANT_TRANSFERRED, {
+      tenantId,
+      tenantUserId: tenant.user.id,
+      propertyId: tenant.propertyId,
+      fromBedId: currentAlloc?.bedId ?? '',
+      toBedId: dto.newBedId,
+      transferReason: dto.transferReason,
+    } satisfies TenantTransferredEvent);
+
+    return result;
+  }
+
+  async getMoveOutPreview(tenantId: string) {
+    const tenant = await this.prisma.tenant.findUnique({
+      where: { id: tenantId },
+    });
+    if (!tenant) throw new NotFoundException('Tenant not found');
+
+    const [pending, outstandingCycles, activeAlloc] = await Promise.all([
+      this.prisma.rentCycle.aggregate({
+        where: { tenantId, status: { in: ['PENDING', 'OVERDUE', 'PARTIAL'] } },
+        _sum: { remainingAmount: true },
+        _count: { _all: true },
+      }),
+      this.prisma.rentCycle.findMany({
+        where: { tenantId, status: { in: ['PENDING', 'OVERDUE', 'PARTIAL'] } },
+        orderBy: [{ year: 'asc' }, { month: 'asc' }],
+        select: {
+          id: true,
+          month: true,
+          year: true,
+          dueDate: true,
+          rentAmount: true,
+          remainingAmount: true,
+          status: true,
+        },
+      }),
+      this.prisma.tenantAllocation.findFirst({
+        where: { tenantId, isActive: true },
+        include: {
+          bed: { include: { room: { select: { number: true, floor: true } } } },
+        },
+      }),
+    ]);
+
+    return {
+      success: true,
+      data: {
+        tenantId,
+        tenantStatus: tenant.status,
+        depositBalance: Number(tenant.depositBalance),
+        pendingRentCycles: outstandingCycles.length,
+        totalPendingRent: Number(pending._sum.remainingAmount ?? 0),
+        netDepositAfterDues: Math.max(
+          0,
+          Number(tenant.depositBalance) - Number(pending._sum.remainingAmount ?? 0),
+        ),
+        activeAllocation: activeAlloc
+          ? {
+              bedId: activeAlloc.bedId,
+              roomNumber: activeAlloc.bed.room.number,
+              floor: activeAlloc.bed.room.floor,
+              startDate: activeAlloc.startDate,
+              monthlyRent: Number(activeAlloc.monthlyRent),
+            }
+          : null,
+        outstandingCycles,
+      },
+    };
   }
 
   // ── Helpers ──────────────────────────────────────────────────────────
@@ -384,14 +527,22 @@ export class TenantWorkflowService {
   private resolveMoveInStatus(
     depositPaid: boolean,
     kycSubmitted: boolean,
-  ): TenantStatus {
-    if (!depositPaid) return TenantStatus.DEPOSIT_PENDING;
-    if (!kycSubmitted) return TenantStatus.KYC_PENDING;
-    return TenantStatus.ACTIVE;
+  ): { status: TenantStatus; depositCompleted: boolean; kycCompleted: boolean } {
+    const depositCompleted = depositPaid;
+    const kycCompleted = kycSubmitted;
+    // Both done → ACTIVE; otherwise PENDING_COMPLIANCE with boolean flags tracking what's left
+    const status =
+      depositCompleted && kycCompleted
+        ? TenantStatus.ACTIVE
+        : TenantStatus.PENDING_COMPLIANCE;
+    return { status, depositCompleted, kycCompleted };
   }
 
   private async getTenant(id: string) {
-    const tenant = await this.prisma.tenant.findUnique({ where: { id } });
+    const tenant = await this.prisma.tenant.findUnique({
+      where: { id },
+      include: { user: { select: { id: true } } },
+    });
     if (!tenant) throw new NotFoundException('Tenant not found');
     return tenant;
   }

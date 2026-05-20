@@ -1,6 +1,6 @@
 import { apiClient } from './api';
 
-export type ComplaintStatus = 'OPEN' | 'ASSIGNED' | 'IN_PROGRESS' | 'RESOLVED' | 'CLOSED' | 'REJECTED';
+export type ComplaintStatus = 'OPEN' | 'ASSIGNED' | 'IN_PROGRESS' | 'RESOLVED' | 'REOPENED' | 'CLOSED' | 'REJECTED';
 export type ComplaintCategory =
   | 'MAINTENANCE'
   | 'PLUMBING'

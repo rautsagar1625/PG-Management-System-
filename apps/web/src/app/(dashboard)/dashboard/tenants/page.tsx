@@ -27,8 +27,10 @@ const STATUS_TABS = [
   { key: 'ROOM_FINALIZED', label: 'Finalizing' },
   { key: 'DEPOSIT_PENDING', label: 'Dep. Pending' },
   { key: 'KYC_PENDING', label: 'KYC Pending' },
+  { key: 'PENDING_COMPLIANCE', label: 'Compliance' },
   { key: 'NOTICE_PERIOD', label: 'Notice' },
   { key: 'MOVED_OUT', label: 'Moved Out' },
+  { key: 'ARCHIVED', label: 'Archived' },
 ];
 
 const TENANT_COLUMNS: Column<Tenant>[] = [

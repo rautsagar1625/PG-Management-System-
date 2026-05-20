@@ -1,4 +1,5 @@
 import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import { EventEmitter2 } from '@nestjs/event-emitter';
 import { PaymentType, Prisma, RentCycleStatus } from '@prisma/client';
 import { IsDateString, IsIn, IsNumber, IsOptional, IsPositive, IsString, IsUUID } from 'class-validator';
 import { Type } from 'class-transformer';
@@ -7,6 +8,7 @@ import { RENT_GRACE_PERIOD_DAYS } from '@pg-system/constants';
 import { generateReceiptNumber, getRentDueDate, isRentOverdue } from '@pg-system/utils';
 
 import { PrismaService } from '../../database/prisma.service';
+import { DOMAIN_EVENTS, PaymentRecordedEvent } from '../../events/domain-events';
 
 export class RecordPaymentDto {
   @IsUUID()
@@ -21,8 +23,8 @@ export class RecordPaymentDto {
   @Type(() => Number)
   amount: number;
 
-  @IsIn(['RENT', 'DEPOSIT', 'DEPOSIT_REFUND', 'DEPOSIT_ADJUSTMENT', 'FINE', 'MISCELLANEOUS'])
-  type: 'RENT' | 'DEPOSIT' | 'DEPOSIT_REFUND' | 'DEPOSIT_ADJUSTMENT' | 'FINE' | 'MISCELLANEOUS';
+  @IsIn(['RENT', 'DEPOSIT', 'DEPOSIT_REFUND', 'DEPOSIT_ADJUSTMENT', 'RENT_REFUND', 'ADJUSTMENT', 'WAIVER', 'FINE', 'MISCELLANEOUS'])
+  type: 'RENT' | 'DEPOSIT' | 'DEPOSIT_REFUND' | 'DEPOSIT_ADJUSTMENT' | 'RENT_REFUND' | 'ADJUSTMENT' | 'WAIVER' | 'FINE' | 'MISCELLANEOUS';
 
   @IsIn(['CASH', 'UPI', 'BANK_TRANSFER', 'CHEQUE', 'CARD', 'ONLINE'])
   method: 'CASH' | 'UPI' | 'BANK_TRANSFER' | 'CHEQUE' | 'CARD' | 'ONLINE';
@@ -41,7 +43,10 @@ export class RecordPaymentDto {
 
 @Injectable()
 export class RentService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private eventEmitter: EventEmitter2,
+  ) {}
 
   /**
    * Generate rent cycles for all active tenants in a property for a given month/year.
@@ -120,10 +125,10 @@ export class RentService {
       }
     }
 
-    return this.prisma.$transaction(async (tx) => {
+    const result = await this.prisma.$transaction(async (tx) => {
       const tenant = await tx.tenant.findUnique({
         where: { id: dto.tenantId },
-        select: { id: true, propertyId: true, status: true },
+        select: { id: true, userId: true, propertyId: true, status: true },
       });
       if (!tenant) throw new NotFoundException('Tenant not found');
       if (tenant.status === 'MOVED_OUT') {
@@ -237,8 +242,20 @@ export class RentService {
         }
       }
 
-      return { payment, receiptNo: receipt.receiptNo };
+      return { payment, receiptNo: receipt.receiptNo, tenantUserId: tenant.userId, propertyId: tenant.propertyId };
     });
+
+    this.eventEmitter.emit(DOMAIN_EVENTS.PAYMENT_RECORDED, {
+      paymentId: result.payment.id,
+      tenantId: dto.tenantId,
+      tenantUserId: result.tenantUserId,
+      propertyId: result.propertyId,
+      amount: dto.amount,
+      type: dto.type,
+      receiptNo: result.receiptNo,
+    } satisfies PaymentRecordedEvent);
+
+    return { payment: result.payment, receiptNo: result.receiptNo };
   }
 
   async getRentCycles(

@@ -1,5 +1,6 @@
 import * as SecureStore from 'expo-secure-store';
 import { api } from './api';
+import { clearPushToken } from './push';
 
 export interface AuthUser {
   id: string;
@@ -36,6 +37,7 @@ export async function logout(): Promise<void> {
   const refreshToken = await SecureStore.getItemAsync(KEYS.REFRESH_TOKEN);
   if (refreshToken) {
     try {
+      await clearPushToken(); // deregister device before session ends
       await api.post('/auth/logout', { refreshToken });
     } catch {
       // ignore logout errors — local cleanup proceeds regardless

@@ -837,7 +837,7 @@ function RoomTransferModal({
         id: b.id,
         label: `${r.number} — Bed ${b.label}`,
         status: b.status,
-        monthlyRent: b.monthlyRent ?? r.monthlyRent,
+        monthlyRent: b.monthlyRent ?? r.baseRent,
       })),
   );
 

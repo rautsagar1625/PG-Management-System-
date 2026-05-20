@@ -40,3 +40,23 @@ export class RefreshTokenDto {
   @MinLength(1)
   refreshToken: string;
 }
+
+export class ForgotPasswordDto {
+  @ApiProperty({ example: 'suresh@example.com' })
+  @IsEmail()
+  email: string;
+}
+
+export class ResetPasswordDto {
+  @ApiProperty()
+  @IsString()
+  @MinLength(1)
+  token: string;
+
+  @ApiProperty({ example: 'NewSecurePass@123' })
+  @IsString()
+  @MinLength(8)
+  @Matches(/[A-Z]/, { message: 'Password must contain at least one uppercase letter' })
+  @Matches(/[0-9]/, { message: 'Password must contain at least one number' })
+  password: string;
+}

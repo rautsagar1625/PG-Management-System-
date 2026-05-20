@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { APP_GUARD } from '@nestjs/core';
+import { EventEmitterModule } from '@nestjs/event-emitter';
 import { ScheduleModule } from '@nestjs/schedule';
 import { ThrottlerModule } from '@nestjs/throttler';
 import * as Joi from 'joi';
@@ -10,6 +11,8 @@ import { PropertyRoleGuard } from './common/guards/property-role.guard';
 import { SystemRoleGuard } from './common/guards/system-role.guard';
 
 import { DatabaseModule } from './database/database.module';
+import { EmailModule } from './modules/email/email.module';
+import { PushModule } from './modules/push/push.module';
 import { ExportModule } from './modules/export/export.module';
 import { PdfModule } from './modules/pdf/pdf.module';
 import { AllocationModule } from './modules/allocation/allocation.module';
@@ -46,6 +49,9 @@ import { UsersModule } from './modules/users/users.module';
         CORS_ORIGIN: Joi.string().required(),
         REDIS_URL: Joi.string().optional(),
         SENTRY_DSN: Joi.string().uri().optional(),
+        RESEND_API_KEY: Joi.string().optional(),
+        EMAIL_FROM: Joi.string().optional(),
+        APP_URL: Joi.string().uri().optional(),
         S3_BUCKET: Joi.string().optional(),
         S3_REGION: Joi.string().optional(),
         S3_ENDPOINT: Joi.string().uri().optional(),
@@ -54,9 +60,12 @@ import { UsersModule } from './modules/users/users.module';
       }),
       validationOptions: { abortEarly: false },
     }),
+    EventEmitterModule.forRoot({ wildcard: false, maxListeners: 20 }),
     ScheduleModule.forRoot(),
     ThrottlerModule.forRoot([{ ttl: 60000, limit: 100 }]),
     DatabaseModule,
+    EmailModule,
+    PushModule,
     HealthModule,
     FilesModule,
     AllocationModule,

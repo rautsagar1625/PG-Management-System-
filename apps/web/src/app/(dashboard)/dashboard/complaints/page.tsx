@@ -40,6 +40,7 @@ const STATUS_TABS: { key: string; label: string }[] = [
   { key: 'ASSIGNED', label: 'Assigned' },
   { key: 'IN_PROGRESS', label: 'In Progress' },
   { key: 'RESOLVED', label: 'Resolved' },
+  { key: 'REOPENED', label: 'Reopened' },
   { key: 'CLOSED', label: 'Closed' },
 ];
 
@@ -51,12 +52,13 @@ const PRIORITY_CONFIG: Record<string, { label: string; cls: string }> = {
 };
 
 const STATUS_CONFIG: Record<string, { label: string; cls: string; icon: React.ElementType }> = {
-  OPEN:        { label: 'Open',        cls: 'bg-red-100 text-red-700',     icon: AlertCircle },
+  OPEN:        { label: 'Open',        cls: 'bg-red-100 text-red-700',       icon: AlertCircle },
   ASSIGNED:    { label: 'Assigned',    cls: 'bg-yellow-100 text-yellow-700', icon: Clock },
-  IN_PROGRESS: { label: 'In Progress', cls: 'bg-blue-100 text-blue-700',   icon: Clock },
-  RESOLVED:    { label: 'Resolved',    cls: 'bg-green-100 text-green-700', icon: CheckCircle2 },
-  CLOSED:      { label: 'Closed',      cls: 'bg-gray-100 text-gray-500',   icon: CheckCircle2 },
-  REJECTED:    { label: 'Rejected',    cls: 'bg-gray-100 text-gray-500',   icon: XCircle },
+  IN_PROGRESS: { label: 'In Progress', cls: 'bg-blue-100 text-blue-700',     icon: Clock },
+  RESOLVED:    { label: 'Resolved',    cls: 'bg-green-100 text-green-700',   icon: CheckCircle2 },
+  REOPENED:    { label: 'Reopened',    cls: 'bg-purple-100 text-purple-700', icon: ArrowRight },
+  CLOSED:      { label: 'Closed',      cls: 'bg-gray-100 text-gray-500',     icon: CheckCircle2 },
+  REJECTED:    { label: 'Rejected',    cls: 'bg-gray-100 text-gray-500',     icon: XCircle },
 };
 
 // What transitions are available from each status (frontend mirror of backend)
@@ -64,7 +66,8 @@ const NEXT_STATUSES: Partial<Record<ComplaintStatus, ComplaintStatus[]>> = {
   OPEN:        ['ASSIGNED', 'REJECTED'],
   ASSIGNED:    ['IN_PROGRESS', 'OPEN'],
   IN_PROGRESS: ['RESOLVED', 'ASSIGNED'],
-  RESOLVED:    ['CLOSED', 'IN_PROGRESS'],
+  RESOLVED:    ['REOPENED', 'CLOSED'],
+  REOPENED:    ['ASSIGNED', 'IN_PROGRESS', 'RESOLVED', 'CLOSED'],
 };
 
 const CATEGORIES: { value: ComplaintCategory; label: string }[] = [

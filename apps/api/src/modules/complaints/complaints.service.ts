@@ -1,7 +1,16 @@
 import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+import { EventEmitter2 } from '@nestjs/event-emitter';
 import { ComplaintCategory, ComplaintStatus, Priority } from '@prisma/client';
 
+import { COMPLAINT_STATUS_TRANSITIONS } from '@pg-system/constants';
+
 import { PrismaService } from '../../database/prisma.service';
+import {
+  DOMAIN_EVENTS,
+  ComplaintCreatedEvent,
+  ComplaintStatusChangedEvent,
+  ComplaintResolvedEvent,
+} from '../../events/domain-events';
 
 export interface CreateComplaintDto {
   propertyId: string;
@@ -19,18 +28,12 @@ export interface UpdateComplaintDto {
   comment?: string;
 }
 
-const STATUS_TRANSITIONS: Record<ComplaintStatus, ComplaintStatus[]> = {
-  OPEN: ['ASSIGNED', 'REJECTED'],
-  ASSIGNED: ['IN_PROGRESS', 'OPEN'],
-  IN_PROGRESS: ['RESOLVED', 'ASSIGNED'],
-  RESOLVED: ['CLOSED', 'IN_PROGRESS'],
-  CLOSED: [],
-  REJECTED: [],
-};
-
 @Injectable()
 export class ComplaintsService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private eventEmitter: EventEmitter2,
+  ) {}
 
   async findAll(propertyId: string, filters: { status?: string; category?: string }) {
     const complaints = await this.prisma.complaint.findMany({
@@ -82,15 +85,27 @@ export class ComplaintsService {
         priority: dto.priority ?? 'MEDIUM',
       },
     });
+
+    this.eventEmitter.emit(DOMAIN_EVENTS.COMPLAINT_CREATED, {
+      complaintId: complaint.id,
+      propertyId: complaint.propertyId,
+      tenantId: complaint.tenantId ?? undefined,
+      raisedBy,
+      title: complaint.title,
+    } satisfies ComplaintCreatedEvent);
+
     return { success: true, data: complaint };
   }
 
   async update(id: string, dto: UpdateComplaintDto, updatedBy: string) {
-    const complaint = await this.prisma.complaint.findUnique({ where: { id } });
+    const complaint = await this.prisma.complaint.findUnique({
+      where: { id },
+      include: { tenant: { include: { user: { select: { id: true } } } } },
+    });
     if (!complaint) throw new NotFoundException('Complaint not found');
 
     if (dto.status && dto.status !== complaint.status) {
-      const allowed = STATUS_TRANSITIONS[complaint.status];
+      const allowed = COMPLAINT_STATUS_TRANSITIONS[complaint.status] ?? [];
       if (!allowed.includes(dto.status)) {
         throw new BadRequestException(
           `Cannot transition complaint from ${complaint.status} to ${dto.status}`,
@@ -99,15 +114,18 @@ export class ComplaintsService {
     }
 
     const now = new Date();
-    return this.prisma.$transaction(async (tx) => {
+    const statusStr = dto.status as string | undefined;
+
+    const result = await this.prisma.$transaction(async (tx) => {
       const updated = await tx.complaint.update({
         where: { id },
         data: {
           ...(dto.status && { status: dto.status }),
           ...(dto.assignedTo && { assignedTo: dto.assignedTo }),
           ...(dto.priority && { priority: dto.priority }),
-          ...(dto.status === 'RESOLVED' && { resolvedAt: now }),
-          ...(dto.status === 'CLOSED' && { closedAt: now }),
+          ...(statusStr === 'RESOLVED' && { resolvedAt: now }),
+          ...(statusStr === 'CLOSED' && { closedAt: now }),
+          ...(statusStr === 'REOPENED' && { reopenedAt: now }),
         },
       });
 
@@ -127,7 +145,29 @@ export class ComplaintsService {
         });
       }
 
-      return { success: true, data: updated };
+      return updated;
     });
+
+    if (dto.status && dto.status !== complaint.status) {
+      this.eventEmitter.emit(DOMAIN_EVENTS.COMPLAINT_STATUS_CHANGED, {
+        complaintId: id,
+        propertyId: complaint.propertyId,
+        fromStatus: complaint.status,
+        toStatus: dto.status,
+        updatedBy,
+      } satisfies ComplaintStatusChangedEvent);
+
+      if (statusStr === 'RESOLVED') {
+        this.eventEmitter.emit(DOMAIN_EVENTS.COMPLAINT_RESOLVED, {
+          complaintId: id,
+          propertyId: complaint.propertyId,
+          tenantId: complaint.tenantId ?? undefined,
+          tenantUserId: complaint.tenant?.user?.id,
+          complaintTitle: complaint.title,
+        } satisfies ComplaintResolvedEvent);
+      }
+    }
+
+    return { success: true, data: result };
   }
 }

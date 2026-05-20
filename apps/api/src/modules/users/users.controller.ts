@@ -1,4 +1,4 @@
-import { BadRequestException, Controller, Get, Query, UseGuards } from '@nestjs/common';
+import { BadRequestException, Body, Controller, Get, Post, Query, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { Throttle } from '@nestjs/throttler';
 
@@ -19,6 +19,15 @@ export class UsersController {
   @ApiOperation({ summary: 'Get current user profile with property roles' })
   getProfile(@CurrentUser() ctx: RequestContext) {
     return this.usersService.getProfile(ctx.userId);
+  }
+
+  @Post('push-token')
+  @ApiOperation({ summary: 'Register or clear the Expo push token for this device' })
+  registerPushToken(
+    @CurrentUser() ctx: RequestContext,
+    @Body('token') token: string | null,
+  ) {
+    return this.usersService.registerPushToken(ctx.userId, token ?? null);
   }
 
   @Get('search')

@@ -25,23 +25,26 @@ model User {
   passwordHash String
   systemRole   SystemRole @default(USER)
   isVerified   Boolean    @default(false)
-  isActive     Boolean    @default(true)
-  lastLoginAt  DateTime?
-  createdAt    DateTime   @default(now())
-  updatedAt    DateTime   @updatedAt
+  isActive      Boolean    @default(true)
+  lastLoginAt   DateTime?
+  expoPushToken String?
+  createdAt     DateTime   @default(now())
+  updatedAt     DateTime   @updatedAt
 
   // A user can hold ONE role per property (enforced by PropertyRole unique index)
   // but can be in many properties
   propertyRoles      PropertyRole[]
   tenantProfile      Tenant?
   sessions           Session[]
+  passwordResets     PasswordReset[]
   notifications      Notification[]
   auditLogs          AuditLog[]
-  complaintsRaised   Complaint[]      @relation("ComplaintRaisedBy")
-  complaintsAssigned Complaint[]      @relation("ComplaintAssignedTo")
+  complaintsRaised   Complaint[]       @relation("ComplaintRaisedBy")
+  complaintsAssigned Complaint[]       @relation("ComplaintAssignedTo")
   complaintUpdates   ComplaintUpdate[]
-  paymentsRecorded   Payment[]        @relation("PaymentRecordedBy")
+  paymentsRecorded   Payment[]         @relation("PaymentRecordedBy")
   fileUploads        FileUpload[]
+  operationalNotes   OperationalNote[]
 
   @@index([email])
   @@index([phone])
@@ -56,6 +59,20 @@ model Session {
   ipAddress String?
   expiresAt DateTime
   revokedAt DateTime?
+  createdAt DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([token])
+  @@index([userId])
+}
+
+model PasswordReset {
+  id        String    @id @default(cuid())
+  userId    String
+  token     String    @unique
+  expiresAt DateTime
+  usedAt    DateTime?
   createdAt DateTime  @default(now())
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -87,16 +104,17 @@ model Property {
   createdAt DateTime       @default(now())
   updatedAt DateTime       @updatedAt
 
-  roles           PropertyRole[]
-  rooms           Room[]
-  tenants         Tenant[]
-  financialModels FinancialModel[]
-  settlements     Settlement[]
-  complaints      Complaint[]
-  notifications   Notification[]
-  auditLogs       AuditLog[]
-  rentCycles      RentCycle[]
-  payments        Payment[]
+  roles            PropertyRole[]
+  rooms            Room[]
+  tenants          Tenant[]
+  financialModels  FinancialModel[]
+  settlements      Settlement[]
+  complaints       Complaint[]
+  notifications    Notification[]
+  auditLogs        AuditLog[]
+  rentCycles       RentCycle[]
+  payments         Payment[]
+  operationalNotes OperationalNote[]
 
   @@index([city])
   @@index([status])
@@ -127,9 +145,11 @@ enum PropertyType {
 }
 
 enum PropertyStatus {
-  SETUP    // Being configured — not yet live
-  ACTIVE   // Fully operational
-  INACTIVE // Closed or paused
+  SETUP              // Being configured — not yet live
+  ACTIVE             // Fully operational
+  UNDER_MAINTENANCE  // Temporarily suspended (repairs, renovations)
+  INACTIVE           // Paused — no new admissions
+  CLOSED             // Permanently shut down
 }
 
 enum PropertyRoleType {
@@ -144,23 +164,32 @@ enum PropertyRoleType {
 // ─────────────────────────────────────────
 
 model Room {
-  id              String     @id @default(cuid())
-  propertyId      String
-  number          String     // Display identifier: "101", "G-2", "A1"
-  floor           Int?
-  type            RoomType
-  sharingCapacity Int        // Max occupants: 1, 2, 3, 4, 6
-  monthlyRent     Decimal    @db.Decimal(10, 2) // Default per-bed rent
-  status          RoomStatus @default(AVAILABLE)
-  amenities       String[]   @default([])
-  createdAt       DateTime   @default(now())
-  updatedAt       DateTime   @updatedAt
+  id               String     @id @default(cuid())
+  propertyId       String
+  number           String     // Display identifier: "101", "G-2", "A1"
+  floor            Int?       // Numeric floor (0 = ground, 1 = first, etc.)
+  floorLabel       String?    // Human label: "Ground Floor", "1st Floor"
+  type             RoomType
+  sharingCapacity  Int        // Max occupants: 1, 2, 3, 4, 6
+  baseRent         Decimal    @db.Decimal(10, 2) // Listed/standard rent per bed for this room
+  status           RoomStatus @default(AVAILABLE)
+  amenities        String[]   @default([])
+  // Physical attributes
+  attachedWashroom Boolean    @default(false)
+  acAvailable      Boolean    @default(false)
+  balcony          Boolean    @default(false)
+  genderType       PropertyType? // Override property gender type at room level
+  // Operational
+  maintenanceNote  String?    // Brief note when status = UNDER_MAINTENANCE
+  createdAt        DateTime   @default(now())
+  updatedAt        DateTime   @updatedAt
 
   property Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
   beds     Bed[]
 
   @@unique([propertyId, number])
   @@index([propertyId, status])
+  @@index([propertyId, floor])
 }
 
 model Bed {
@@ -198,8 +227,9 @@ enum RoomStatus {
 enum BedStatus {
   AVAILABLE
   OCCUPIED
-  RESERVED         // Locked for a tenant in ROOM_FINALIZED state
-  UNDER_MAINTENANCE
+  RESERVED          // Locked for a tenant in ROOM_FINALIZED / PENDING_COMPLIANCE state
+  UNDER_MAINTENANCE // Temporarily out of service for repairs
+  BLOCKED           // Admin-blocked; not available for allocation (e.g. removed bed)
 }
 
 // ─────────────────────────────────────────
@@ -221,12 +251,18 @@ model Tenant {
   depositBalance Decimal       @default(0) @db.Decimal(10, 2) // Amount paid to date
   depositStatus  DepositStatus @default(PENDING)
 
+  // Compliance flags — tracked independently so any order is valid
+  depositCompleted  Boolean @default(false) // Deposit fully paid
+  kycCompleted      Boolean @default(false) // KYC docs submitted & verified
+  agreementSigned   Boolean @default(false) // Rental agreement executed
+
   // Lifecycle timestamps
   visitScheduledAt DateTime?
   visitedAt        DateTime?
   moveInDate       DateTime?
   moveOutDate      DateTime?
   noticeDate       DateTime?
+  archivedAt       DateTime?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -264,8 +300,9 @@ model TenantAllocation {
   endDate     DateTime?        // null = currently active
   isActive    Boolean          @default(true)
   monthlyRent Decimal          @db.Decimal(10, 2) // Rent locked at allocation time
-  reason      AllocationReason @default(INITIAL)
-  notes       String?
+  reason         AllocationReason @default(INITIAL)
+  transferReason TransferReason?  // Set only when reason = TRANSFER
+  notes          String?
   createdAt   DateTime         @default(now())
   updatedAt   DateTime         @updatedAt
 
@@ -279,6 +316,16 @@ model TenantAllocation {
 enum AllocationReason {
   INITIAL  // First move-in
   TRANSFER // Moved from a different bed
+}
+
+enum TransferReason {
+  TENANT_REQUEST    // Tenant asked to change room
+  UPGRADE           // Moving to better/larger room
+  DOWNGRADE         // Moving to smaller/cheaper room
+  MAINTENANCE       // Current room under maintenance
+  ROOMMATE_CONFLICT // Conflict with existing roommates
+  OPERATOR_DECISION // Operator reorganising occupancy
+  OTHER             // Reason noted in notes field
 }
 
 // KYC documents — one row per document submitted
@@ -315,11 +362,13 @@ enum TenantStatus {
   VISIT_SCHEDULED
   VISITED
   ROOM_FINALIZED
-  DEPOSIT_PENDING
-  KYC_PENDING
+  PENDING_COMPLIANCE  // Deposit + KYC + agreement tracked independently via boolean flags
+  DEPOSIT_PENDING     // @deprecated — use PENDING_COMPLIANCE + depositCompleted=false
+  KYC_PENDING         // @deprecated — use PENDING_COMPLIANCE + kycCompleted=false
   ACTIVE
   NOTICE_PERIOD
   MOVED_OUT
+  ARCHIVED            // Soft-archived post move-out; excluded from operational lists
   REJECTED
 }
 
@@ -488,6 +537,9 @@ enum PaymentType {
   DEPOSIT
   DEPOSIT_REFUND
   DEPOSIT_ADJUSTMENT // Security deposit applied to cover unpaid rent
+  RENT_REFUND        // Overpayment or pro-rata refund on rent
+  ADJUSTMENT         // Generic credit/debit correction (with notes)
+  WAIVER             // Formal write-off of an outstanding amount
   FINE
   MISCELLANEOUS
 }
@@ -523,6 +575,7 @@ model Complaint {
   priority    Priority          @default(MEDIUM)
   status      ComplaintStatus   @default(OPEN)
   resolvedAt  DateTime?
+  reopenedAt  DateTime?
   closedAt    DateTime?
   createdAt   DateTime          @default(now())
   updatedAt   DateTime          @updatedAt
@@ -570,6 +623,7 @@ enum ComplaintStatus {
   ASSIGNED
   IN_PROGRESS
   RESOLVED
+  REOPENED    // Tenant contested resolution — restarts the workflow
   CLOSED
   REJECTED
 }
@@ -679,4 +733,40 @@ enum FileStatus {
   UPLOADED // Confirmed present in storage
   FAILED   // Upload expired or failed
   DELETED  // Soft-deleted; key retained for audit trail
+}
+
+// ─────────────────────────────────────────
+// OPERATIONAL NOTES
+// ─────────────────────────────────────────
+
+// Freeform operational notes — not complaints, not audit logs.
+// Examples: "Promised payment on 15th", "Mattress replaced", "Late fee waived".
+// Can be attached to any entity or left as general property-level notes.
+// entityType + entityId form a polymorphic reference (no FK enforced — by design).
+// Application layer is responsible for ensuring entityId is valid for its entityType.
+model OperationalNote {
+  id         String         @id @default(cuid())
+  propertyId String
+  entityType NoteEntityType
+  entityId   String?        // Polymorphic: tenantId, roomId, complaintId, etc.
+  content    String
+  isPinned   Boolean        @default(false)
+  createdBy  String
+  createdAt  DateTime       @default(now())
+  updatedAt  DateTime       @updatedAt
+
+  property Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  author   User     @relation(fields: [createdBy], references: [id])
+
+  @@index([propertyId, entityType, entityId])
+  @@index([propertyId, isPinned, createdAt])
+  @@index([entityType, entityId])
+}
+
+enum NoteEntityType {
+  TENANT
+  ROOM
+  COMPLAINT
+  PROPERTY
+  GENERAL
 }

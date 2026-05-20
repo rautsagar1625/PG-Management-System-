@@ -8,10 +8,12 @@ const tenantStatusMap: Record<string, { label: string; variant: BadgeVariant }> 
   ROOM_FINALIZED: { label: 'Room Finalized', variant: 'cyan' },
   DEPOSIT_PENDING: { label: 'Deposit Pending', variant: 'warning' },
   KYC_PENDING: { label: 'KYC Pending', variant: 'orange' },
+  PENDING_COMPLIANCE: { label: 'Pending Compliance', variant: 'warning' },
   ACTIVE: { label: 'Active', variant: 'success' },
   NOTICE_PERIOD: { label: 'Notice Period', variant: 'error' },
   MOVED_OUT: { label: 'Moved Out', variant: 'default' },
   REJECTED: { label: 'Rejected', variant: 'default' },
+  ARCHIVED: { label: 'Archived', variant: 'default' },
 };
 
 // ── Rent Cycle Status ────────────────────────────────────────────────
@@ -39,6 +41,7 @@ const bedStatusMap: Record<string, { label: string; variant: BadgeVariant }> = {
   OCCUPIED: { label: 'Occupied', variant: 'error' },
   RESERVED: { label: 'Reserved', variant: 'warning' },
   UNDER_MAINTENANCE: { label: 'Maintenance', variant: 'default' },
+  BLOCKED: { label: 'Blocked', variant: 'default' },
 };
 
 // ── Property Status ──────────────────────────────────────────────────
@@ -46,6 +49,8 @@ const propertyStatusMap: Record<string, { label: string; variant: BadgeVariant }
   SETUP: { label: 'Setup', variant: 'warning' },
   ACTIVE: { label: 'Active', variant: 'success' },
   INACTIVE: { label: 'Inactive', variant: 'default' },
+  UNDER_MAINTENANCE: { label: 'Maintenance', variant: 'warning' },
+  CLOSED: { label: 'Closed', variant: 'default' },
 };
 
 // ── Property Type ────────────────────────────────────────────────────

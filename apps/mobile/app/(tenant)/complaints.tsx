@@ -28,6 +28,7 @@ const STATUS_CONFIG: Record<string, { label: string; color: string; bg: string }
   ASSIGNED:    { label: 'Assigned',    color: '#92400e', bg: '#fef3c7' },
   IN_PROGRESS: { label: 'In Progress', color: '#1e40af', bg: '#dbeafe' },
   RESOLVED:    { label: 'Resolved',    color: '#065f46', bg: '#d1fae5' },
+  REOPENED:    { label: 'Reopened',    color: '#4c1d95', bg: '#ede9fe' },
   CLOSED:      { label: 'Closed',      color: '#374151', bg: colors.gray100 },
   REJECTED:    { label: 'Rejected',    color: '#374151', bg: colors.gray100 },
 };
@@ -68,8 +69,8 @@ export default function ComplaintsScreen() {
         category,
         priority,
       });
-      setShowCreate(false);
       resetForm();
+      setShowCreate(false);
       refetch();
     } catch (err) {
       Alert.alert('Error', err instanceof Error ? err.message : 'Failed to submit complaint');

@@ -89,6 +89,15 @@ async function bootstrap() {
     credentials: true,
   });
 
+  // Surface the internally-generated request ID to clients for correlation
+  app.getHttpAdapter().getInstance().addHook(
+    'onSend',
+    (_req: { id: string }, reply: { header: (k: string, v: string) => void }, _payload: unknown, done: () => void) => {
+      reply.header('X-Request-Id', _req.id);
+      done();
+    },
+  );
+
   await app.listen(port, '0.0.0.0');
   Logger.log(`API running on http://localhost:${port}/${apiPrefix}`, 'Bootstrap');
 

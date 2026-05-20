@@ -205,7 +205,7 @@ export default function NewTenantPage() {
       moveIn(state.tenant!.id, {
         bedId: state.selectedBedId,
         moveInDate: state.moveInDate,
-        monthlyRent: parseFloat(state.monthlyRent) || (state.selectedRoom?.monthlyRent ?? 0),
+        monthlyRent: parseFloat(state.monthlyRent) || (state.selectedRoom?.baseRent ?? 0),
         depositAmount: parseFloat(state.depositAmount) || 0,
         depositPaid: state.depositPaid,
         kycSubmitted: state.kycSubmitted,
@@ -454,7 +454,7 @@ function Step2SelectBed({
       selectedBedId: bed.id,
       selectedBed: bed,
       selectedRoom: room,
-      monthlyRent: String(bed.monthlyRent ?? room.monthlyRent),
+      monthlyRent: String(bed.monthlyRent ?? room.baseRent),
     });
   };
 
@@ -483,7 +483,7 @@ function Step2SelectBed({
             label: b.label,
             status: b.status,
             tenantName: b.currentAllocation?.tenant.user.name,
-            monthlyRent: b.monthlyRent ?? room.monthlyRent,
+            monthlyRent: b.monthlyRent ?? room.baseRent,
           }));
 
           const occupied = beds.filter((b) => b.status === 'OCCUPIED').length;
@@ -504,7 +504,7 @@ function Step2SelectBed({
                     <span className="text-xs text-gray-400 ml-2">Floor {room.floor}</span>
                   )}
                   <span className="text-xs text-gray-500 ml-2">
-                    · {formatCurrency(room.monthlyRent)}/bed
+                    · {formatCurrency(room.baseRent)}/bed
                   </span>
                 </div>
                 <span className="text-xs text-gray-400">{occupied}/{beds.length} occupied</span>
@@ -528,7 +528,7 @@ function Step2SelectBed({
             Selected: Room {state.selectedRoom?.number} — Bed {state.selectedBed.label}
           </p>
           <p className="text-xs text-primary-600 mt-0.5">
-            Monthly rent: {formatCurrency(state.selectedBed.monthlyRent ?? state.selectedRoom?.monthlyRent ?? 0)}
+            Monthly rent: {formatCurrency(state.selectedBed.monthlyRent ?? state.selectedRoom?.baseRent ?? 0)}
           </p>
         </div>
       )}
@@ -600,7 +600,7 @@ function Step3MoveIn({
             value={state.monthlyRent}
             onChange={(e) => update({ monthlyRent: e.target.value })}
             type="number"
-            placeholder={String(state.selectedRoom?.monthlyRent ?? '')}
+            placeholder={String(state.selectedRoom?.baseRent ?? '')}
           />
         </FormField>
       </div>

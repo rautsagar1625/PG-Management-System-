@@ -316,7 +316,7 @@ function RoomsTab({ propertyId }: { propertyId: string }) {
       floor: form.floor ? parseInt(form.floor) : undefined,
       type: form.type as Room['type'],
       sharingCapacity: parseInt(form.type.split('_')[0] === 'PRIVATE' ? '1' : form.type.split('_')[0] === 'DOUBLE' ? '2' : form.type.split('_')[0] === 'TRIPLE' ? '3' : form.type.split('_')[0] === 'FOUR' ? '4' : '6'),
-      monthlyRent: parseFloat(form.monthlyRent),
+      baseRent: parseFloat(form.monthlyRent),
     });
   };
 
@@ -423,7 +423,7 @@ function RoomRow({ room }: { room: Room }) {
     label: b.label,
     status: b.status,
     tenantName: b.currentAllocation?.tenant.user.name,
-    monthlyRent: b.monthlyRent ?? room.monthlyRent,
+    monthlyRent: b.monthlyRent ?? room.baseRent,
   }));
 
   const occupied = beds.filter((b) => b.status === 'OCCUPIED').length;
@@ -444,7 +444,7 @@ function RoomRow({ room }: { room: Room }) {
             </div>
             <div className="flex items-center gap-2 mt-0.5">
               <span className="text-xs text-gray-500">
-                {ROOM_TYPE_LABELS[room.type]} · {formatCurrency(room.monthlyRent)}/bed
+                {ROOM_TYPE_LABELS[room.type]} · {formatCurrency(room.baseRent)}/bed
               </span>
             </div>
           </div>

@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
 import { getStoredUser, type AuthUser } from '../lib/auth';
 import { setForceLogoutHandler } from '../lib/api';
+import { registerPushToken, clearPushToken } from '../lib/push';
 
 interface AuthContextValue {
   user: AuthUser | null;
@@ -28,7 +29,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     getStoredUser()
-      .then(setUser)
+      .then((u) => {
+        setUser(u);
+        if (u) registerPushToken(); // best-effort; never throws
+      })
       .finally(() => setIsLoading(false));
   }, []);
 

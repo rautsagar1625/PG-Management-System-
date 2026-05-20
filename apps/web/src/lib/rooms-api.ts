@@ -42,7 +42,7 @@ export interface Room {
   floor: number | null;
   type: RoomType;
   sharingCapacity: number;
-  monthlyRent: number;
+  baseRent: number;
   status: RoomStatus;
   amenities: string[];
   createdAt: string;
@@ -55,7 +55,7 @@ export interface CreateRoomDto {
   floor?: number;
   type: RoomType;
   sharingCapacity: number;
-  monthlyRent: number;
+  baseRent: number;
   amenities?: string[];
 }
 

@@ -7,10 +7,12 @@ export type TenantStatus =
   | 'ROOM_FINALIZED'
   | 'DEPOSIT_PENDING'
   | 'KYC_PENDING'
+  | 'PENDING_COMPLIANCE'
   | 'ACTIVE'
   | 'NOTICE_PERIOD'
   | 'MOVED_OUT'
-  | 'REJECTED';
+  | 'REJECTED'
+  | 'ARCHIVED';
 
 export type KycStatus = 'PENDING' | 'SUBMITTED' | 'VERIFIED' | 'REJECTED';
 export type DepositStatus =
@@ -156,7 +158,22 @@ export interface RoomTransferDto {
   newBedId: string;
   transferDate: string;
   newMonthlyRent?: number;
+  transferReason?: string;
   notes?: string;
+}
+
+export interface MoveOutPreview {
+  pendingRentCycles: Array<{
+    id: string;
+    month: number;
+    year: number;
+    remainingAmount: number;
+    status: string;
+  }>;
+  totalPendingRent: number;
+  depositBalance: number;
+  depositAmount: number;
+  estimatedRefund: number;
 }
 
 // ── Queries ──────────────────────────────────────────────────────────
@@ -247,6 +264,27 @@ export async function roomTransfer(id: string, dto: RoomTransferDto): Promise<Te
   const { data } = await apiClient.put<{ success: boolean; data: Tenant }>(
     `/tenants/${id}/transfer-room`,
     dto,
+  );
+  return data.data;
+}
+
+export async function cancelNotice(id: string): Promise<Tenant> {
+  const { data } = await apiClient.put<{ success: boolean; data: Tenant }>(
+    `/tenants/${id}/cancel-notice`,
+  );
+  return data.data;
+}
+
+export async function archiveTenant(id: string): Promise<Tenant> {
+  const { data } = await apiClient.put<{ success: boolean; data: Tenant }>(
+    `/tenants/${id}/archive`,
+  );
+  return data.data;
+}
+
+export async function getMoveOutPreview(id: string): Promise<MoveOutPreview> {
+  const { data } = await apiClient.get<{ success: boolean; data: MoveOutPreview }>(
+    `/tenants/${id}/move-out-preview`,
   );
   return data.data;
 }

@@ -14,7 +14,7 @@ export class BedsService {
         room: { propertyId, status: { not: 'INACTIVE' } },
       },
       include: {
-        room: { select: { number: true, floor: true, monthlyRent: true, type: true } },
+        room: { select: { number: true, floor: true, baseRent: true, type: true } },
       },
       orderBy: [{ room: { floor: 'asc' } }, { room: { number: 'asc' } }, { label: 'asc' }],
     });

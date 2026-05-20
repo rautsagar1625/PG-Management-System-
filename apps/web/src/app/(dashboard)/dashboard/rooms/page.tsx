@@ -210,7 +210,7 @@ function RoomCard({ room }: { room: Room }) {
     label: b.label,
     status: b.status,
     tenantName: b.currentAllocation?.tenant.user.name,
-    monthlyRent: b.monthlyRent ?? room.monthlyRent,
+    monthlyRent: b.monthlyRent ?? room.baseRent,
   }));
 
   const occupied = beds.filter((b) => b.status === 'OCCUPIED').length;
@@ -235,7 +235,7 @@ function RoomCard({ room }: { room: Room }) {
               )}
             </div>
             <p className="text-xs text-gray-500 mt-0.5">
-              {ROOM_TYPE_LABELS[room.type]} · {formatCurrency(room.monthlyRent)}/bed
+              {ROOM_TYPE_LABELS[room.type]} · {formatCurrency(room.baseRent)}/bed
             </p>
           </div>
         </div>
