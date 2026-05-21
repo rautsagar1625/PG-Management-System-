@@ -1,6 +1,19 @@
-import { Body, Controller, Get, Param, Post, Put, Query, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  Headers,
+  Param,
+  Post,
+  Put,
+  Query,
+  Req,
+  UseGuards,
+} from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
+import type { Request } from 'express';
 
+import { Public } from '../../common/decorators/public.decorator';
 import { PropertyRoles } from '../../common/decorators/roles.decorator';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import {
@@ -49,5 +62,32 @@ export class AutopayController {
   @PropertyRoles('OWNER', 'OPERATOR', 'CO_OPERATOR', 'STAFF')
   cancel(@Param('id') id: string) {
     return this.autopayService.cancel(id);
+  }
+
+  /**
+   * Razorpay webhook endpoint.
+   * Must remain public (no JWT) — Razorpay POSTs here directly.
+   * Signature is verified via HMAC-SHA256 using RAZORPAY_WEBHOOK_SECRET.
+   */
+  @Post('webhook')
+  @Public()
+  @ApiOperation({ summary: 'Razorpay webhook — not protected by auth guard' })
+  async webhook(
+    @Req() req: Request & { rawBody?: Buffer },
+    @Headers('x-razorpay-signature') signature: string,
+  ) {
+    const rawBody = req.rawBody?.toString() ?? JSON.stringify(req.body);
+    await this.autopayService.verifyWebhook(rawBody, signature);
+    await this.autopayService.handleWebhook(req.body as Record<string, unknown>);
+    return { success: true };
+  }
+
+  @Post('payment-order')
+  @ApiOperation({ summary: 'Create a Razorpay order for one-time rent payment' })
+  @PropertyRoles('OWNER', 'OPERATOR', 'CO_OPERATOR', 'STAFF')
+  createPaymentOrder(
+    @Body() body: { tenantId: string; amount: number; propertyId: string },
+  ) {
+    return this.autopayService.createPaymentOrder(body.tenantId, body.amount, body.propertyId);
   }
 }

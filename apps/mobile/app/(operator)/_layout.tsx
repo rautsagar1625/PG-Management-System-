@@ -100,6 +100,10 @@ export default function OperatorLayout() {
           ),
         }}
       />
+      {/* Hidden screens — navigable via router.push but not shown in tab bar */}
+      <Tabs.Screen name="rooms" options={{ href: null, title: 'Rooms' }} />
+      <Tabs.Screen name="settlements" options={{ href: null, title: 'Settlements' }} />
+      <Tabs.Screen name="attendance-log" options={{ href: null, title: 'Attendance Log' }} />
     </Tabs>
   );
 }

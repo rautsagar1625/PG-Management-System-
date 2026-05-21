@@ -38,6 +38,7 @@ import { TenantsModule } from './modules/tenants/tenants.module';
 import { UsersModule } from './modules/users/users.module';
 import { AttendanceModule } from './modules/attendance/attendance.module';
 import { FoodMenuModule } from './modules/food-menu/food-menu.module';
+import { KycModule } from './modules/kyc/kyc.module';
 import { WhatsAppModule } from './modules/whatsapp/whatsapp.module';
 
 @Module({
@@ -97,6 +98,7 @@ import { WhatsAppModule } from './modules/whatsapp/whatsapp.module';
     JobsModule,
     FoodMenuModule,
     AttendanceModule,
+    KycModule,
     WhatsAppModule,
   ],
   providers: [

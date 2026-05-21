@@ -1,12 +1,8 @@
 import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { MandateStatus } from '@prisma/client';
+import Razorpay from 'razorpay';
 
 import { PrismaService } from '../../database/prisma.service';
-
-// NOTE: Razorpay e-NACH integration plugs in here via externalId.
-// When a mandate is created, call Razorpay's API to register the mandate
-// and store the returned mandate ID in externalId. Webhook callbacks from
-// Razorpay should call PUT /autopay/:id/status to sync mandate state.
 
 export interface CreateAutopayMandateDto {
   tenantId: string;
@@ -26,7 +22,17 @@ export interface UpdateMandateStatusDto {
 
 @Injectable()
 export class AutopayService {
-  constructor(private prisma: PrismaService) {}
+  private razorpay: Razorpay | null;
+
+  constructor(private prisma: PrismaService) {
+    const keyId = process.env.RAZORPAY_KEY_ID;
+    this.razorpay = keyId
+      ? new Razorpay({
+          key_id: keyId,
+          key_secret: process.env.RAZORPAY_KEY_SECRET ?? '',
+        })
+      : null;
+  }
 
   async findByProperty(propertyId: string) {
     const mandates = await this.prisma.autopayMandate.findMany({
@@ -71,7 +77,33 @@ export class AutopayService {
       },
     });
 
-    return { success: true, data: mandate };
+    // If Razorpay is configured, generate a mandate registration link via subscription
+    let mandateLink: string | undefined;
+    if (this.razorpay) {
+      try {
+        const planId = process.env.RAZORPAY_PLAN_ID ?? 'plan_placeholder';
+        const sub = await this.razorpay.subscriptions.create({
+          plan_id: planId,
+          total_count: 120,
+          quantity: 1,
+          customer_notify: 1,
+          notes: { mandateId: mandate.id, propertyId: dto.propertyId },
+        });
+
+        mandateLink = (sub as { short_url?: string }).short_url;
+
+        // Update externalId with Razorpay subscription ID
+        await this.prisma.autopayMandate.update({
+          where: { id: mandate.id },
+          data: { externalId: sub.id, status: MandateStatus.PENDING },
+        });
+      } catch (err) {
+        // Non-fatal — mandate created in DB, Razorpay link generation failed
+        console.error('Razorpay mandate creation failed:', err);
+      }
+    }
+
+    return { success: true, data: { ...mandate, mandateLink } };
   }
 
   async updateStatus(id: string, dto: UpdateMandateStatusDto) {
@@ -110,5 +142,85 @@ export class AutopayService {
     });
 
     return { success: true, data: updated };
+  }
+
+  async verifyWebhook(payload: string, signature: string): Promise<void> {
+    const secret = process.env.RAZORPAY_WEBHOOK_SECRET ?? '';
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const crypto = await import('crypto');
+    const expected = crypto.createHmac('sha256', secret).update(payload).digest('hex');
+    if (expected !== signature) {
+      throw new BadRequestException('Invalid webhook signature');
+    }
+  }
+
+  async handleWebhook(payload: Record<string, unknown>): Promise<void> {
+    const event = payload.event as string | undefined;
+    if (!event) return;
+
+    const subscriptionPayload = (payload.payload as Record<string, unknown> | undefined)
+      ?.subscription as Record<string, unknown> | undefined;
+    const entity = subscriptionPayload?.entity as Record<string, unknown> | undefined;
+    const externalId = entity?.id as string | undefined;
+
+    if (!externalId) return;
+
+    const mandate = await this.prisma.autopayMandate.findFirst({
+      where: { externalId },
+    });
+
+    if (!mandate) return;
+
+    const now = new Date();
+
+    switch (event) {
+      case 'subscription.activated':
+        await this.prisma.autopayMandate.update({
+          where: { id: mandate.id },
+          data: { status: MandateStatus.ACTIVE, activatedAt: now },
+        });
+        break;
+
+      case 'subscription.cancelled':
+        await this.prisma.autopayMandate.update({
+          where: { id: mandate.id },
+          data: { status: MandateStatus.CANCELLED, cancelledAt: now },
+        });
+        break;
+
+      case 'subscription.halted':
+        await this.prisma.autopayMandate.update({
+          where: { id: mandate.id },
+          data: { status: MandateStatus.PAUSED },
+        });
+        break;
+
+      default:
+        // Unhandled event — log and ignore
+        console.log(`Unhandled Razorpay webhook event: ${event}`);
+    }
+  }
+
+  async createPaymentOrder(tenantId: string, amount: number, propertyId: string) {
+    if (!this.razorpay) {
+      throw new BadRequestException('Razorpay not configured');
+    }
+
+    const order = await this.razorpay.orders.create({
+      amount: Math.round(amount * 100), // convert to paise
+      currency: 'INR',
+      receipt: `rent_${tenantId}_${Date.now()}`,
+      notes: { tenantId, propertyId },
+    });
+
+    return {
+      success: true,
+      data: {
+        orderId: order.id,
+        amount: order.amount,
+        currency: order.currency,
+        keyId: process.env.RAZORPAY_KEY_ID,
+      },
+    };
   }
 }

@@ -17,6 +17,8 @@ import {
   UserPlus,
   UtensilsCrossed,
   CalendarCheck,
+  TrendingUp,
+  CreditCard,
 } from 'lucide-react';
 import { cn, getInitials } from '@/lib/utils';
 import { useAuth } from '@/providers/AuthProvider';
@@ -43,6 +45,7 @@ const NAV_GROUPS = [
       { href: '/dashboard/collections', label: 'Collections', icon: IndianRupee, exact: false },
       { href: '/dashboard/overdue', label: 'Overdue', icon: AlertTriangle, exact: false },
       { href: '/dashboard/settlements', label: 'Settlements', icon: PiggyBank, exact: false },
+      { href: '/dashboard/autopay', label: 'Autopay', icon: CreditCard, exact: false },
     ],
   },
   {
@@ -52,6 +55,12 @@ const NAV_GROUPS = [
       { href: '/dashboard/food-menu', label: 'Food Menu', icon: UtensilsCrossed, exact: false },
       { href: '/dashboard/attendance', label: 'Attendance', icon: CalendarCheck, exact: false },
       { href: '/dashboard/audit-logs', label: 'Audit Log', icon: Shield, exact: false },
+    ],
+  },
+  {
+    label: 'Insights',
+    items: [
+      { href: '/dashboard/analytics', label: 'Analytics', icon: TrendingUp, exact: false },
     ],
   },
 ];

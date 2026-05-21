@@ -165,6 +165,105 @@ export class PdfService {
     return this.buildPdf(docDef);
   }
 
+  // ── Rental Agreement PDF ─────────────────────────────────────────────────
+
+  async generateAgreement(agreementId: string): Promise<Buffer> {
+    const agreement = await this.prisma.rentalAgreement.findUnique({
+      where: { id: agreementId },
+      include: {
+        tenant: {
+          include: {
+            user: { select: { name: true, phone: true, email: true } },
+            property: { select: { name: true, address: true, city: true } },
+            allocations: {
+              where: { isActive: true },
+              include: { bed: { include: { room: { select: { number: true } } } } },
+              take: 1,
+            },
+          },
+        },
+        property: { select: { name: true, address: true, city: true } },
+      },
+    });
+
+    if (!agreement) throw new NotFoundException(`Agreement ${agreementId} not found`);
+
+    const { tenant, property } = agreement;
+    const room = tenant.allocations[0]?.bed?.room?.number ?? 'N/A';
+    const bedLabel = tenant.allocations[0]?.bed?.label ?? '';
+
+    const fmtDate = (d: Date | null | undefined) =>
+      d ? d.toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric' }) : 'Pending';
+
+    const docDef: TDocumentDefinitions = {
+      pageSize: 'A4',
+      pageMargins: [50, 50, 50, 50],
+      content: [
+        this.header(property.name, `${property.address}, ${property.city}`),
+        { text: 'RENTAL AGREEMENT', style: 'docTitle', margin: [0, 20, 0, 8] },
+        this.divider(),
+        this.twoCol('Agreement ID', agreementId.slice(0, 12) + '...', 'Status', agreement.status),
+        this.twoCol('Tenant Name', tenant.user.name, 'Room / Bed', room ? `${room}-${bedLabel}` : 'N/A'),
+        this.twoCol('Phone', tenant.user.phone ?? '—', 'Email', tenant.user.email ?? '—'),
+        this.divider(),
+        { text: 'Financial Terms', style: 'sectionHeader', margin: [0, 12, 0, 6] },
+        this.twoCol(
+          'Monthly Rent', `₹${Number(agreement.rentAmount).toLocaleString('en-IN')}`,
+          'Security Deposit', `₹${Number(agreement.depositAmount).toLocaleString('en-IN')}`,
+        ),
+        this.twoCol(
+          'Start Date', fmtDate(agreement.startDate),
+          'End Date', agreement.endDate ? fmtDate(agreement.endDate) : 'Open-ended',
+        ),
+        { text: 'Terms & Conditions', style: 'sectionHeader', margin: [0, 16, 0, 6] },
+        {
+          table: {
+            widths: ['*'],
+            body: [[{ text: agreement.terms, fontSize: 9, color: '#374151', lineHeight: 1.5 }]],
+          },
+          layout: { fillColor: () => '#f9fafb', hLineColor: () => '#e5e7eb', vLineColor: () => '#e5e7eb' },
+          margin: [0, 0, 0, 16],
+        },
+        this.divider(),
+        { text: 'Signatures', style: 'sectionHeader', margin: [0, 12, 0, 8] },
+        {
+          columns: [
+            {
+              stack: [
+                { text: 'Tenant', style: 'label' },
+                { text: tenant.user.name, style: 'value', margin: [0, 4, 0, 0] },
+                { text: `Signed: ${fmtDate(agreement.signedByTenantAt)}`, style: 'note', margin: [0, 4, 0, 0] },
+              ],
+              width: '50%',
+            },
+            {
+              stack: [
+                { text: 'Owner / Operator', style: 'label' },
+                { text: property.name, style: 'value', margin: [0, 4, 0, 0] },
+                { text: `Signed: ${fmtDate(agreement.signedByOwnerAt)}`, style: 'note', margin: [0, 4, 0, 0] },
+              ],
+              width: '50%',
+            },
+          ],
+          margin: [0, 0, 0, 24],
+        },
+        this.divider(),
+        { text: 'This is a computer-generated rental agreement document.', style: 'note', margin: [0, 8, 0, 0], alignment: 'center' },
+      ],
+      styles: {
+        docTitle: { fontSize: 18, bold: true, alignment: 'center', color: '#1e40af' },
+        sectionHeader: { fontSize: 12, bold: true, color: '#374151' },
+        tableHeader: { bold: true, fillColor: '#f3f4f6' },
+        label: { fontSize: 9, color: '#6b7280' },
+        value: { fontSize: 10, bold: true },
+        note: { fontSize: 8, color: '#9ca3af', italics: true },
+      },
+      defaultStyle: { font: 'Roboto', fontSize: 10 },
+    };
+
+    return this.buildPdf(docDef);
+  }
+
   // ── Helpers ───────────────────────────────────────────────────────────────
 
   private header(propertyName: string, address: string): Content {

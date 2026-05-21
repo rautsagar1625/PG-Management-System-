@@ -121,6 +121,8 @@ export default function TenantLayout() {
           ),
         }}
       />
+      {/* Hidden screen — navigable via router.push from Home bell icon */}
+      <Tabs.Screen name="notifications" options={{ href: null, title: 'Notifications' }} />
     </Tabs>
   );
 }

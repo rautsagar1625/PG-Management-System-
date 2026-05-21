@@ -38,4 +38,15 @@ export class PdfController {
       .header('Content-Disposition', `inline; filename="settlement-${id}.pdf"`)
       .send(buffer);
   }
+
+  @Get('agreement/:id')
+  @ApiOperation({ summary: 'Generate rental agreement PDF' })
+  @PropertyRoles('OWNER', 'OPERATOR', 'CO_OPERATOR', 'STAFF')
+  async agreement(@Param('id') id: string, @Res() reply: FReply) {
+    const buffer = await this.pdfService.generateAgreement(id);
+    reply
+      .header('Content-Type', 'application/pdf')
+      .header('Content-Disposition', `inline; filename="agreement-${id.slice(0, 8)}.pdf"`)
+      .send(buffer);
+  }
 }

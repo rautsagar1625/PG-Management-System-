@@ -10,6 +10,7 @@ import {
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import { useRouter } from 'expo-router';
 import { useAuth } from '../../src/context/AuthContext';
 import { getTenantDashboard } from '../../src/lib/tenant-api';
 import { useAsync } from '../../src/lib/hooks';
@@ -36,6 +37,7 @@ function getGreeting(): string {
 export default function HomeScreen() {
   const { user } = useAuth();
   const { top } = useSafeAreaInsets();
+  const router = useRouter();
   const { data, loading, error, refetch } = useAsync(getTenantDashboard, []);
 
   const dashboard = data;
@@ -69,11 +71,20 @@ export default function HomeScreen() {
             <Text style={styles.heroGreeting}>{getGreeting()},</Text>
             <Text style={styles.heroName}>{firstName} 👋</Text>
           </View>
-          <View style={styles.heroBadge}>
-            <Ionicons name="shield-checkmark" size={14} color="#4f46e5" style={{ marginRight: 4 }} />
-            <Text style={styles.heroBadgeText} numberOfLines={1}>
-              {dashboard?.tenant.tenantCode ?? '—'}
-            </Text>
+          <View style={{ flexDirection: 'row', gap: 8, alignItems: 'center' }}>
+            <TouchableOpacity
+              onPress={() => router.push('/(tenant)/notifications' as never)}
+              style={styles.bellBtn}
+              activeOpacity={0.75}
+            >
+              <Ionicons name="notifications-outline" size={20} color="#fff" />
+            </TouchableOpacity>
+            <View style={styles.heroBadge}>
+              <Ionicons name="shield-checkmark" size={14} color="#4f46e5" style={{ marginRight: 4 }} />
+              <Text style={styles.heroBadgeText} numberOfLines={1}>
+                {dashboard?.tenant.tenantCode ?? '—'}
+              </Text>
+            </View>
           </View>
         </View>
 
@@ -278,6 +289,11 @@ const styles = StyleSheet.create({
   heroLeft: { flex: 1, marginRight: 12 },
   heroGreeting: { fontSize: 14, color: 'rgba(255,255,255,0.75)', fontWeight: '500' },
   heroName: { fontSize: 24, fontWeight: '800', color: '#fff', marginTop: 2, letterSpacing: -0.5 },
+  bellBtn: {
+    width: 36, height: 36, borderRadius: 18,
+    backgroundColor: 'rgba(255,255,255,0.15)',
+    alignItems: 'center', justifyContent: 'center',
+  },
   heroBadge: {
     flexDirection: 'row',
     alignItems: 'center',

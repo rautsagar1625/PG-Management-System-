@@ -7,6 +7,7 @@ import {
   TouchableOpacity,
   RefreshControl,
 } from 'react-native';
+import { useState } from 'react';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -150,6 +151,8 @@ export default function OperatorDashboard() {
 
   const firstName = user?.name?.split(' ')[0] ?? 'there';
   const g = data?.globalSummary;
+  const properties = (user as unknown as { properties?: Array<{ id: string; name: string }> })?.properties ?? [];
+  const [selectedPropertyId, setSelectedPropertyId] = useState(properties[0]?.id ?? '');
 
   return (
     <ScrollView
@@ -186,6 +189,30 @@ export default function OperatorDashboard() {
             </Text>
           </View>
         </View>
+
+        {properties.length > 1 && (
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={{ gap: 6, paddingVertical: 8 }}
+          >
+            {properties.map((p) => (
+              <TouchableOpacity
+                key={p.id}
+                onPress={() => setSelectedPropertyId(p.id)}
+                style={[
+                  styles.propPill,
+                  selectedPropertyId === p.id && styles.propPillActive,
+                ]}
+                activeOpacity={0.75}
+              >
+                <Text style={[styles.propPillText, selectedPropertyId === p.id && { color: '#fff' }]}>
+                  {p.name}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
+        )}
 
         {g && (
           <View style={styles.heroStats}>
@@ -255,6 +282,27 @@ export default function OperatorDashboard() {
           color={colors.gray700}
           bg={colors.gray100}
           onPress={() => router.push('/(operator)/tenants' as never)}
+        />
+        <QuickAction
+          icon="bed-outline"
+          label="Rooms"
+          color={colors.blueText}
+          bg={colors.blueBg}
+          onPress={() => router.push('/(operator)/rooms' as never)}
+        />
+        <QuickAction
+          icon="cash-outline"
+          label="Settlements"
+          color={colors.greenText}
+          bg={colors.greenBg}
+          onPress={() => router.push('/(operator)/settlements' as never)}
+        />
+        <QuickAction
+          icon="location-outline"
+          label="Attendance"
+          color={colors.violet}
+          bg={colors.violetBg}
+          onPress={() => router.push('/(operator)/attendance-log' as never)}
         />
       </View>
 
@@ -334,6 +382,17 @@ const styles = StyleSheet.create({
   },
   greeting: { fontSize: 14, color: 'rgba(255,255,255,0.65)', fontWeight: '500' },
   heroName: { fontSize: 26, fontWeight: '800', color: '#fff', marginTop: 2, letterSpacing: -0.5 },
+  propPill: {
+    paddingHorizontal: 14, paddingVertical: 6, borderRadius: 20,
+    backgroundColor: 'rgba(255,255,255,0.08)',
+    borderWidth: 1, borderColor: 'rgba(255,255,255,0.15)',
+  },
+  propPillActive: {
+    backgroundColor: 'rgba(255,255,255,0.25)',
+    borderColor: 'rgba(255,255,255,0.6)',
+  },
+  propPillText: { fontSize: 12, fontWeight: '700', color: 'rgba(255,255,255,0.6)' },
+
   roleBadge: {
     flexDirection: 'row',
     alignItems: 'center',
