@@ -20,6 +20,9 @@ const BREADCRUMB_MAP: Record<string, string> = {
   '/dashboard/complaints': 'Complaints',
   '/dashboard/audit-logs': 'Audit Log',
   '/dashboard/payments': 'Payments',
+  '/dashboard/leads': 'Lead Pipeline',
+  '/dashboard/food-menu': 'Food Menu',
+  '/dashboard/attendance': 'Attendance',
 };
 
 function getPageTitle(pathname: string): string {

@@ -89,6 +89,24 @@ export default function TenantLayout() {
         }}
       />
       <Tabs.Screen
+        name="food-menu"
+        options={{
+          title: 'Menu',
+          tabBarIcon: ({ focused, color, size }) => (
+            <TabIcon name="restaurant" outlineName="restaurant-outline" focused={focused} color={color} size={size} />
+          ),
+        }}
+      />
+      <Tabs.Screen
+        name="attendance"
+        options={{
+          title: 'Attendance',
+          tabBarIcon: ({ focused, color, size }) => (
+            <TabIcon name="location" outlineName="location-outline" focused={focused} color={color} size={size} />
+          ),
+        }}
+      />
+      <Tabs.Screen
         name="profile"
         options={{
           title: 'Profile',

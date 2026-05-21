@@ -14,6 +14,9 @@ import {
   PiggyBank,
   Shield,
   X,
+  UserPlus,
+  UtensilsCrossed,
+  CalendarCheck,
 } from 'lucide-react';
 import { cn, getInitials } from '@/lib/utils';
 import { useAuth } from '@/providers/AuthProvider';
@@ -31,6 +34,7 @@ const NAV_GROUPS = [
       { href: '/dashboard/properties', label: 'Properties', icon: Building2, exact: false },
       { href: '/dashboard/tenants', label: 'Tenants', icon: Users, exact: false },
       { href: '/dashboard/rooms', label: 'Rooms', icon: BedDouble, exact: false },
+      { href: '/dashboard/leads', label: 'Leads', icon: UserPlus, exact: false },
     ],
   },
   {
@@ -45,6 +49,8 @@ const NAV_GROUPS = [
     label: 'Support',
     items: [
       { href: '/dashboard/complaints', label: 'Complaints', icon: MessageSquare, exact: false },
+      { href: '/dashboard/food-menu', label: 'Food Menu', icon: UtensilsCrossed, exact: false },
+      { href: '/dashboard/attendance', label: 'Attendance', icon: CalendarCheck, exact: false },
       { href: '/dashboard/audit-logs', label: 'Audit Log', icon: Shield, exact: false },
     ],
   },

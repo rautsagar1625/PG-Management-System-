@@ -18,21 +18,20 @@ datasource db {
 // ─────────────────────────────────────────
 
 model User {
-  id           String     @id @default(cuid())
-  name         String
-  email        String     @unique
-  phone        String?    @unique
-  passwordHash String
-  systemRole   SystemRole @default(USER)
-  isVerified   Boolean    @default(false)
-  isActive      Boolean    @default(true)
-  lastLoginAt   DateTime?
-  expoPushToken String?
-  createdAt     DateTime   @default(now())
-  updatedAt     DateTime   @updatedAt
+  id             String     @id @default(cuid())
+  name           String
+  email          String     @unique
+  phone          String?    @unique
+  whatsappPhone  String?    // May differ from phone; used for WhatsApp messages
+  passwordHash   String
+  systemRole     SystemRole @default(USER)
+  isVerified     Boolean    @default(false)
+  isActive       Boolean    @default(true)
+  lastLoginAt    DateTime?
+  expoPushToken  String?
+  createdAt      DateTime   @default(now())
+  updatedAt      DateTime   @updatedAt
 
-  // A user can hold ONE role per property (enforced by PropertyRole unique index)
-  // but can be in many properties
   propertyRoles      PropertyRole[]
   tenantProfile      Tenant?
   sessions           Session[]
@@ -45,6 +44,9 @@ model User {
   paymentsRecorded   Payment[]         @relation("PaymentRecordedBy")
   fileUploads        FileUpload[]
   operationalNotes   OperationalNote[]
+  leadsCreated       Lead[]            @relation("LeadCreatedBy")
+  leadsAssigned      Lead[]            @relation("LeadAssignedTo")
+  attendanceRecords  AttendanceRecord[]
 
   @@index([email])
   @@index([phone])
@@ -91,18 +93,25 @@ enum SystemRole {
 // ─────────────────────────────────────────
 
 model Property {
-  id        String         @id @default(cuid())
-  name      String
-  address   String
-  city      String
-  state     String
-  pincode   String
-  type      PropertyType   @default(MIXED)
-  status    PropertyStatus @default(SETUP)
-  amenities String[]       @default([])
-  rules     String[]       @default([])
-  createdAt DateTime       @default(now())
-  updatedAt DateTime       @updatedAt
+  id            String         @id @default(cuid())
+  name          String
+  slug          String?        @unique // URL-friendly identifier for public page
+  description   String?        // Public-facing description
+  address       String
+  city          String
+  state         String
+  pincode       String
+  type          PropertyType   @default(MIXED)
+  status        PropertyStatus @default(SETUP)
+  amenities     String[]       @default([])
+  rules         String[]       @default([])
+  heroImageUrl  String?        // Main photo for public listing
+  contactPhone  String?        // Public inquiry contact
+  isPublicListed Boolean       @default(false) // Show on public /p/[slug] page
+  wifiSSIDs     String[]       @default([])    // Registered WiFi SSIDs for attendance
+  attendanceRadius Int         @default(200)   // GPS geofence radius in meters
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
 
   roles            PropertyRole[]
   rooms            Room[]
@@ -115,9 +124,15 @@ model Property {
   rentCycles       RentCycle[]
   payments         Payment[]
   operationalNotes OperationalNote[]
+  leads            Lead[]
+  foodMenus        FoodMenu[]
+  attendanceRecords AttendanceRecord[]
+  autoPayMandates   AutopayMandate[]
+  agreements        RentalAgreement[]
 
   @@index([city])
   @@index([status])
+  @@index([slug])
 }
 
 // One role per user per property. Change role = update existing record.
@@ -276,6 +291,9 @@ model Tenant {
   payments          Payment[]
   receipts          Receipt[]
   complaints        Complaint[]
+  autoPayMandates   AutopayMandate[]
+  agreements        RentalAgreement[]
+  lead              Lead?              @relation("TenantFromLead")
 
   @@index([propertyId, status])
   @@index([tenantCode])
@@ -689,6 +707,12 @@ enum NotificationType {
   COMPLAINT_RESOLVED
   ANNOUNCEMENT
   SYSTEM
+  LEAD_ASSIGNED
+  AUTOPAY_ACTIVATED
+  AUTOPAY_DEBIT
+  AGREEMENT_READY
+  AGREEMENT_SIGNED
+  ATTENDANCE_REMINDER
 }
 
 // ─────────────────────────────────────────
@@ -769,4 +793,194 @@ enum NoteEntityType {
   COMPLAINT
   PROPERTY
   GENERAL
+}
+
+// ─────────────────────────────────────────
+// LEAD CRM
+// ─────────────────────────────────────────
+
+model Lead {
+  id          String     @id @default(cuid())
+  propertyId  String
+  name        String
+  phone       String
+  email       String?
+  source      LeadSource @default(DIRECT)
+  status      LeadStatus @default(NEW)
+  budget      Decimal?   @db.Decimal(10, 2)
+  moveInDate  DateTime?
+  roomType    RoomType?
+  notes       String?
+  assignedTo  String?    // userId of staff
+  visitDate   DateTime?
+  tokenAmount Decimal?   @db.Decimal(10, 2) // Booking token paid
+  convertedAt DateTime?  // When lead became a Tenant
+  tenantId    String?    @unique            // Set on conversion
+  createdBy   String     // userId
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+
+  property     Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  assignedUser User?    @relation("LeadAssignedTo", fields: [assignedTo], references: [id])
+  creator      User     @relation("LeadCreatedBy", fields: [createdBy], references: [id])
+  tenant       Tenant?  @relation("TenantFromLead", fields: [tenantId], references: [id])
+
+  @@index([propertyId, status])
+  @@index([phone])
+  @@index([createdAt])
+}
+
+enum LeadSource {
+  DIRECT
+  WEBSITE
+  REFERRAL
+  SOCIAL_MEDIA
+  BROKER
+  WALK_IN
+  OTHER
+}
+
+enum LeadStatus {
+  NEW
+  CONTACTED
+  VISIT_SCHEDULED
+  VISITED
+  NEGOTIATING
+  TOKEN_PAID
+  CONVERTED // Tenant record created
+  LOST
+}
+
+// ─────────────────────────────────────────
+// FOOD MENU
+// ─────────────────────────────────────────
+
+model FoodMenu {
+  id         String   @id @default(cuid())
+  propertyId String
+  dayOfWeek  Int      // 0=Sunday … 6=Saturday
+  mealType   MealType
+  items      String[]
+  timing     String?  // "7:30 AM – 9:00 AM"
+  isActive   Boolean  @default(true)
+  createdBy  String   // userId
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  property Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+
+  @@unique([propertyId, dayOfWeek, mealType])
+  @@index([propertyId, isActive])
+}
+
+enum MealType {
+  BREAKFAST
+  LUNCH
+  EVENING_SNACK
+  DINNER
+}
+
+// ─────────────────────────────────────────
+// ATTENDANCE
+// ─────────────────────────────────────────
+
+model AttendanceRecord {
+  id         String         @id @default(cuid())
+  userId     String
+  propertyId String
+  type       AttendanceType
+  latitude   Float?
+  longitude  Float?
+  accuracy   Float?         // GPS accuracy in metres
+  wifiSSID   String?        // WiFi network detected at check-in
+  isValid    Boolean        @default(true)
+  invalidReason String?     // Populated when isValid=false
+  deviceInfo String?
+  createdAt  DateTime       @default(now())
+
+  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  property Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+  @@index([propertyId, createdAt])
+}
+
+enum AttendanceType {
+  CHECK_IN
+  CHECK_OUT
+}
+
+// ─────────────────────────────────────────
+// AUTOPAY MANDATE
+// ─────────────────────────────────────────
+
+model AutopayMandate {
+  id            String        @id @default(cuid())
+  tenantId      String
+  propertyId    String
+  externalId    String?       // Razorpay mandate ID
+  amount        Decimal       @db.Decimal(10, 2)
+  bankAccount   String?       // Masked: XXXX1234
+  ifscCode      String?
+  accountName   String?
+  debitDay      Int           @default(1) // Day of month to auto-debit (1–28)
+  status        MandateStatus @default(CREATED)
+  activatedAt   DateTime?
+  cancelledAt   DateTime?
+  failureReason String?
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+
+  tenant   Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  property Property @relation(fields: [propertyId], references: [id])
+
+  @@index([tenantId])
+  @@index([propertyId, status])
+}
+
+enum MandateStatus {
+  CREATED  // Initiation sent to tenant
+  PENDING  // Waiting for bank approval
+  ACTIVE   // Approved, auto-debit enabled
+  PAUSED   // Temporarily suspended
+  CANCELLED
+  EXPIRED
+  FAILED
+}
+
+// ─────────────────────────────────────────
+// RENTAL AGREEMENTS
+// ─────────────────────────────────────────
+
+model RentalAgreement {
+  id             String          @id @default(cuid())
+  tenantId       String
+  propertyId     String
+  allocationId   String?
+  terms          String          // Agreement body text
+  rentAmount     Decimal         @db.Decimal(10, 2)
+  depositAmount  Decimal         @db.Decimal(10, 2)
+  startDate      DateTime
+  endDate        DateTime?
+  status         AgreementStatus @default(DRAFT)
+  signedByTenantAt DateTime?
+  signedByOwnerAt  DateTime?
+  fileUrl        String?         // Generated PDF stored in S3/R2
+  createdBy      String          // userId
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+
+  tenant   Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  property Property @relation(fields: [propertyId], references: [id])
+
+  @@index([tenantId])
+  @@index([propertyId, status])
+}
+
+enum AgreementStatus {
+  DRAFT
+  SENT       // Sent to tenant for signing
+  SIGNED     // Both parties signed
+  EXPIRED
+  CANCELLED
 }

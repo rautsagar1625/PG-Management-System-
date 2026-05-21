@@ -83,6 +83,15 @@ export default function OperatorLayout() {
         }}
       />
       <Tabs.Screen
+        name="leads"
+        options={{
+          title: 'Leads',
+          tabBarIcon: (props) => (
+            <TabIcon name="funnel" outlineName="funnel-outline" {...props} />
+          ),
+        }}
+      />
+      <Tabs.Screen
         name="profile"
         options={{
           title: 'Profile',

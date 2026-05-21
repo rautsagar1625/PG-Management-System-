@@ -19,7 +19,10 @@ import { AllocationModule } from './modules/allocation/allocation.module';
 import { AuditModule } from './modules/audit/audit.module';
 import { AuthModule } from './modules/auth/auth.module';
 import { BedsModule } from './modules/beds/beds.module';
+import { AgreementsModule } from './modules/agreements/agreements.module';
+import { AutopayModule } from './modules/autopay/autopay.module';
 import { ComplaintsModule } from './modules/complaints/complaints.module';
+import { LeadsModule } from './modules/leads/leads.module';
 import { DashboardModule } from './modules/dashboard/dashboard.module';
 import { FinancialModule } from './modules/financial/financial.module';
 import { FilesModule } from './modules/files/files.module';
@@ -33,6 +36,9 @@ import { SettlementsModule } from './modules/settlements/settlements.module';
 import { TenantSelfModule } from './modules/tenant-self/tenant-self.module';
 import { TenantsModule } from './modules/tenants/tenants.module';
 import { UsersModule } from './modules/users/users.module';
+import { AttendanceModule } from './modules/attendance/attendance.module';
+import { FoodMenuModule } from './modules/food-menu/food-menu.module';
+import { WhatsAppModule } from './modules/whatsapp/whatsapp.module';
 
 @Module({
   imports: [
@@ -81,11 +87,17 @@ import { UsersModule } from './modules/users/users.module';
     FinancialModule,
     SettlementsModule,
     ComplaintsModule,
+    LeadsModule,
+    AutopayModule,
+    AgreementsModule,
     NotificationsModule,
     DashboardModule,
     ExportModule,
     PdfModule,
     JobsModule,
+    FoodMenuModule,
+    AttendanceModule,
+    WhatsAppModule,
   ],
   providers: [
     // Global guard chain — order matters: auth → system role → property role
