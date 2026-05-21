@@ -7,6 +7,7 @@ import {
   TouchableOpacity,
   RefreshControl,
 } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../../src/context/AuthContext';
@@ -54,7 +55,15 @@ export default function HomeScreen() {
       refreshControl={<RefreshControl refreshing={loading && !!data} onRefresh={refetch} tintColor="#4f46e5" />}
     >
       {/* Hero header */}
-      <View style={[styles.hero, { paddingTop: top + 16 }]}>
+      <LinearGradient
+        colors={['#1e1b4b', '#312e81', '#4f46e5']}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={[styles.hero, { paddingTop: top + 20 }]}
+      >
+        {/* Decorative ring */}
+        <View style={styles.heroRing} />
+
         <View style={styles.heroTop}>
           <View style={styles.heroLeft}>
             <Text style={styles.heroGreeting}>{getGreeting()},</Text>
@@ -76,7 +85,7 @@ export default function HomeScreen() {
             </Text>
           </View>
         )}
-      </View>
+      </LinearGradient>
 
       {/* Loading */}
       {loading && !data && (
@@ -246,9 +255,19 @@ const styles = StyleSheet.create({
 
   /* Hero — paddingTop is set inline via useSafeAreaInsets */
   hero: {
-    backgroundColor: colors.primary,
     paddingHorizontal: 20,
-    paddingBottom: 24,
+    paddingBottom: 28,
+    overflow: 'hidden',
+  },
+  heroRing: {
+    position: 'absolute',
+    right: -60,
+    top: -60,
+    width: 200,
+    height: 200,
+    borderRadius: 100,
+    borderWidth: 40,
+    borderColor: 'rgba(255,255,255,0.05)',
   },
   heroTop: {
     flexDirection: 'row',
@@ -290,13 +309,13 @@ const styles = StyleSheet.create({
   /* Rent card */
   rentCard: {
     backgroundColor: '#fff',
-    borderRadius: 16,
+    borderRadius: 20,
     padding: 18,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.07,
-    shadowRadius: 8,
-    elevation: 3,
+    shadowColor: '#4f46e5',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.08,
+    shadowRadius: 12,
+    elevation: 4,
   },
   rentCardOverdue: {
     borderWidth: 1.5,

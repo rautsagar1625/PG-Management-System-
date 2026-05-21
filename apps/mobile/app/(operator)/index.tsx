@@ -7,6 +7,7 @@ import {
   TouchableOpacity,
   RefreshControl,
 } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
@@ -52,20 +53,18 @@ function StatCard({
   icon,
   label,
   value,
-  color,
-  bg,
+  gradient,
 }: {
-  icon: React.ComponentProps<typeof Ionicons>['name'];
+  icon: IoniconName;
   label: string;
   value: string;
-  color: string;
-  bg: string;
+  gradient: readonly [string, string];
 }) {
   return (
     <View style={[styles.statCard, { flex: 1 }]}>
-      <View style={[styles.statIcon, { backgroundColor: bg }]}>
-        <Ionicons name={icon} size={18} color={color} />
-      </View>
+      <LinearGradient colors={gradient} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.statIcon}>
+        <Ionicons name={icon} size={18} color="#fff" />
+      </LinearGradient>
       <Text style={styles.statValue}>{value}</Text>
       <Text style={styles.statLabel}>{label}</Text>
     </View>
@@ -108,9 +107,7 @@ function PropertyRow({ p }: { p: PropertyCard }) {
               ]}
             />
           </View>
-          <Text style={styles.barSub}>
-            {p.occupiedBeds}/{p.totalBeds} beds
-          </Text>
+          <Text style={styles.barSub}>{p.occupiedBeds}/{p.totalBeds} beds</Text>
         </View>
 
         <View style={styles.propDivider} />
@@ -167,8 +164,16 @@ export default function OperatorDashboard() {
         />
       }
     >
-      {/* Hero */}
-      <View style={[styles.hero, { paddingTop: top + 16 }]}>
+      {/* Hero — gradient */}
+      <LinearGradient
+        colors={['#1e1b4b', '#312e81', '#4f46e5']}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={[styles.hero, { paddingTop: top + 20 }]}
+      >
+        {/* Decorative ring */}
+        <View style={styles.heroRing} />
+
         <View style={styles.heroRow}>
           <View style={{ flex: 1 }}>
             <Text style={styles.greeting}>{getGreeting()},</Text>
@@ -181,7 +186,28 @@ export default function OperatorDashboard() {
             </Text>
           </View>
         </View>
-      </View>
+
+        {g && (
+          <View style={styles.heroStats}>
+            <View style={styles.heroStatItem}>
+              <Text style={styles.heroStatValue}>{formatCurrency(g.totalMonthlyRevenue)}</Text>
+              <Text style={styles.heroStatLabel}>This Month</Text>
+            </View>
+            <View style={styles.heroStatDivider} />
+            <View style={styles.heroStatItem}>
+              <Text style={styles.heroStatValue}>{g.totalProperties}</Text>
+              <Text style={styles.heroStatLabel}>Properties</Text>
+            </View>
+            <View style={styles.heroStatDivider} />
+            <View style={styles.heroStatItem}>
+              <Text style={[styles.heroStatValue, g.totalPendingRent > 0 && { color: '#fcd34d' }]}>
+                {formatCurrency(g.totalPendingRent)}
+              </Text>
+              <Text style={styles.heroStatLabel}>Pending</Text>
+            </View>
+          </View>
+        )}
+      </LinearGradient>
 
       {loading && !data && (
         <View style={styles.center}>
@@ -200,7 +226,7 @@ export default function OperatorDashboard() {
         </View>
       )}
 
-      {/* Quick Actions — always visible once hero renders */}
+      {/* Quick Actions */}
       <View style={styles.qaRow}>
         <QuickAction
           icon="card-outline"
@@ -234,23 +260,21 @@ export default function OperatorDashboard() {
 
       {g && (
         <View style={styles.body}>
-          {/* Global KPIs */}
-          <Text style={styles.sectionLabel}>Overview</Text>
+          {/* KPI stat cards */}
+          <Text style={styles.sectionLabel}>Key Metrics</Text>
           <View style={styles.statRow}>
+            <StatCard
+              icon="trending-up-outline"
+              label="Monthly Revenue"
+              value={formatCurrency(g.totalMonthlyRevenue)}
+              gradient={['#059669', '#10b981']}
+            />
+            <View style={{ width: 10 }} />
             <StatCard
               icon="business-outline"
               label="Properties"
               value={String(g.totalProperties)}
-              color={colors.primary}
-              bg={colors.primaryLight}
-            />
-            <View style={{ width: 10 }} />
-            <StatCard
-              icon="trending-up-outline"
-              label="Monthly Rev."
-              value={formatCurrency(g.totalMonthlyRevenue)}
-              color={colors.green600}
-              bg={colors.greenBg}
+              gradient={['#4f46e5', '#7c3aed']}
             />
           </View>
           <View style={[styles.statRow, { marginTop: 10 }]}>
@@ -258,21 +282,19 @@ export default function OperatorDashboard() {
               icon="time-outline"
               label="Pending Rent"
               value={formatCurrency(g.totalPendingRent)}
-              color={colors.red600}
-              bg={colors.redBg}
+              gradient={['#dc2626', '#ef4444']}
             />
             <View style={{ width: 10 }} />
             <StatCard
               icon="chatbubble-ellipses-outline"
               label="Open Complaints"
               value={String(g.totalOpenComplaints)}
-              color={colors.yellowText}
-              bg={colors.yellowBg}
+              gradient={['#d97706', '#f59e0b']}
             />
           </View>
 
           {/* Per-property cards */}
-          {data.properties.length > 0 && (
+          {data && data.properties.length > 0 && (
             <>
               <Text style={[styles.sectionLabel, { marginTop: 20 }]}>Properties</Text>
               {data.properties.map((p) => (
@@ -288,35 +310,59 @@ export default function OperatorDashboard() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.background },
-  content: { paddingBottom: 32 },
+  content: { paddingBottom: 40 },
 
   hero: {
-    backgroundColor: colors.primary,
     paddingHorizontal: 20,
-    paddingBottom: 24,
+    paddingBottom: 28,
+    overflow: 'hidden',
+  },
+  heroRing: {
+    position: 'absolute',
+    right: -60,
+    top: -60,
+    width: 200,
+    height: 200,
+    borderRadius: 100,
+    borderWidth: 40,
+    borderColor: 'rgba(255,255,255,0.05)',
   },
   heroRow: {
     flexDirection: 'row',
     alignItems: 'flex-start',
     justifyContent: 'space-between',
   },
-  greeting: { fontSize: 14, color: 'rgba(255,255,255,0.75)', fontWeight: '500' },
-  heroName: { fontSize: 24, fontWeight: '800', color: '#fff', marginTop: 2, letterSpacing: -0.5 },
+  greeting: { fontSize: 14, color: 'rgba(255,255,255,0.65)', fontWeight: '500' },
+  heroName: { fontSize: 26, fontWeight: '800', color: '#fff', marginTop: 2, letterSpacing: -0.5 },
   roleBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#fff',
+    backgroundColor: 'rgba(255,255,255,0.95)',
     borderRadius: 20,
     paddingHorizontal: 10,
     paddingVertical: 5,
     maxWidth: 130,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.12,
+    shadowOpacity: 0.15,
     shadowRadius: 4,
     elevation: 3,
   },
   roleBadgeText: { fontSize: 11, color: colors.primary, fontWeight: '700' },
+
+  heroStats: {
+    flexDirection: 'row',
+    marginTop: 20,
+    backgroundColor: 'rgba(255,255,255,0.1)',
+    borderRadius: 16,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.12)',
+  },
+  heroStatItem: { flex: 1, alignItems: 'center' },
+  heroStatValue: { fontSize: 15, fontWeight: '800', color: '#fff', letterSpacing: -0.3 },
+  heroStatLabel: { fontSize: 10, color: 'rgba(255,255,255,0.6)', fontWeight: '500', marginTop: 2 },
+  heroStatDivider: { width: 1, backgroundColor: 'rgba(255,255,255,0.15)', marginHorizontal: 4 },
 
   center: { paddingVertical: 48, alignItems: 'center', gap: 10 },
   loadingText: { fontSize: 13, color: colors.gray400 },
@@ -333,60 +379,58 @@ const styles = StyleSheet.create({
     backgroundColor: '#fff',
     borderBottomWidth: 1,
     borderBottomColor: colors.gray100,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.04,
+    shadowRadius: 4,
+    elevation: 1,
   },
   qaBtn: { alignItems: 'center', flex: 1 },
-  qaIcon: {
-    width: 48,
-    height: 48,
-    borderRadius: 14,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 6,
-  },
+  qaIcon: { width: 48, height: 48, borderRadius: 14, alignItems: 'center', justifyContent: 'center', marginBottom: 6 },
   qaLabel: { fontSize: 10, fontWeight: '600', color: colors.gray600, textAlign: 'center' },
 
-  body: { padding: 16, marginTop: -8 },
+  body: { padding: 16, marginTop: 4 },
   sectionLabel: {
     fontSize: 11,
     fontWeight: '700',
-    color: colors.gray500,
+    color: colors.gray400,
     textTransform: 'uppercase',
-    letterSpacing: 0.6,
+    letterSpacing: 0.8,
     marginBottom: 10,
   },
 
   statRow: { flexDirection: 'row' },
   statCard: {
     backgroundColor: '#fff',
-    borderRadius: 14,
+    borderRadius: 16,
     padding: 14,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 4,
-    elevation: 1,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.06,
+    shadowRadius: 8,
+    elevation: 2,
   },
   statIcon: {
-    width: 36,
-    height: 36,
-    borderRadius: 10,
+    width: 38,
+    height: 38,
+    borderRadius: 11,
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: 10,
   },
-  statValue: { fontSize: 17, fontWeight: '800', color: colors.gray900, marginBottom: 3 },
+  statValue: { fontSize: 17, fontWeight: '800', color: colors.gray900, marginBottom: 3, letterSpacing: -0.3 },
   statLabel: { fontSize: 11, color: colors.gray400, fontWeight: '500' },
 
   propCard: {
     backgroundColor: '#fff',
-    borderRadius: 14,
+    borderRadius: 16,
     padding: 16,
     marginBottom: 10,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 4,
-    elevation: 1,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.06,
+    shadowRadius: 8,
+    elevation: 2,
   },
   propHeader: { flexDirection: 'row', alignItems: 'flex-start', marginBottom: 14 },
   propName: { fontSize: 15, fontWeight: '700', color: colors.gray900 },
@@ -402,7 +446,7 @@ const styles = StyleSheet.create({
   complaintBadgeText: { fontSize: 11, fontWeight: '700', color: colors.red600 },
 
   propStats: { flexDirection: 'row', gap: 12 },
-  propDivider: { width: 1, backgroundColor: colors.gray200 },
+  propDivider: { width: 1, backgroundColor: colors.gray100 },
   barRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 5 },
   barLabel: { fontSize: 11, color: colors.gray500, fontWeight: '500' },
   barPct: { fontSize: 11, fontWeight: '700', color: colors.gray700 },
