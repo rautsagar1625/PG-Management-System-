@@ -17,7 +17,11 @@ import {
   CheckCircle2,
   Clock,
   IndianRupee,
+  ShieldCheck,
+  Trash2,
+  Plus,
 } from 'lucide-react';
+import { toast } from 'sonner';
 import {
   getTenant,
   scheduleVisit,
@@ -31,6 +35,15 @@ import {
   type RoomTransferDto,
 } from '@/lib/tenants-api';
 import { getRooms } from '@/lib/rooms-api';
+import {
+  getDocuments,
+  addDocument,
+  verifyDocument,
+  deleteDocument,
+  type KycDocument,
+  type DocumentType,
+  DOC_TYPE_LABELS,
+} from '@/lib/kyc-api';
 import { TenantStatusBadge, KycStatusBadge, RentStatusBadge } from '@/components/ui/StatusBadge';
 import { Modal } from '@/components/ui/Modal';
 import { ConfirmModal } from '@/components/ui/ConfirmModal';
@@ -40,7 +53,7 @@ import { Input, FormField } from '@/components/ui/FormField';
 import { type BedInfo } from '@/components/ui/BedGrid';
 import { cn, formatDate, formatCurrency, getInitials } from '@/lib/utils';
 
-type Tab = 'overview' | 'rent' | 'payments' | 'history';
+type Tab = 'overview' | 'rent' | 'payments' | 'history' | 'kyc';
 
 export default function TenantDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -207,7 +220,7 @@ export default function TenantDetailPage() {
 
       {/* Tabs */}
       <div className="flex gap-1 border-b border-gray-200">
-        {(['overview', 'rent', 'payments', 'history'] as Tab[]).map((t) => (
+        {(['overview', 'rent', 'payments', 'history', 'kyc'] as Tab[]).map((t) => (
           <button
             key={t}
             onClick={() => setTab(t)}
@@ -218,7 +231,7 @@ export default function TenantDetailPage() {
                 : 'border-transparent text-gray-500 hover:text-gray-700',
             )}
           >
-            {t === 'history' ? 'Allocations' : t === 'rent' ? 'Rent Cycles' : t.charAt(0).toUpperCase() + t.slice(1)}
+            {t === 'history' ? 'Allocations' : t === 'rent' ? 'Rent Cycles' : t === 'kyc' ? 'KYC Docs' : t.charAt(0).toUpperCase() + t.slice(1)}
           </button>
         ))}
       </div>
@@ -228,6 +241,7 @@ export default function TenantDetailPage() {
       {tab === 'rent' && <RentCyclesTab tenant={tenant} />}
       {tab === 'payments' && <PaymentsTab tenant={tenant} />}
       {tab === 'history' && <AllocationHistoryTab tenant={tenant} />}
+      {tab === 'kyc' && <KycTab tenant={tenant} />}
 
       {/* Modals */}
       {modal?.type === 'scheduleVisit' && (
@@ -801,6 +815,207 @@ function MoveOutModal({
         </div>
       </div>
     </Modal>
+  );
+}
+
+// ── KYC Tab ───────────────────────────────────────────────────────────────────
+
+const DOC_TYPES: DocumentType[] = ['AADHAAR', 'PAN', 'PASSPORT', 'DRIVING_LICENSE', 'VOTER_ID'];
+
+function KycTab({ tenant }: { tenant: TenantDetail }) {
+  const qc = useQueryClient();
+  const tenantId = tenant.id;
+  const [showAdd, setShowAdd] = useState(false);
+  const [docType, setDocType] = useState<DocumentType>('AADHAAR');
+  const [docNumber, setDocNumber] = useState('');
+  const [fileUrl, setFileUrl] = useState('');
+  const [addError, setAddError] = useState('');
+
+  const { data: docs = [], isLoading } = useQuery({
+    queryKey: ['kyc-docs', tenantId],
+    queryFn: () => getDocuments(tenantId),
+  });
+
+  const addMut = useMutation({
+    mutationFn: () =>
+      addDocument({ tenantId, type: docType, documentNumber: docNumber, ...(fileUrl ? { fileUrl } : {}) }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['kyc-docs', tenantId] });
+      qc.invalidateQueries({ queryKey: ['tenant', tenantId] });
+      setShowAdd(false);
+      setDocNumber('');
+      setFileUrl('');
+      toast.success('Document added');
+    },
+    onError: () => toast.error('Failed to add document'),
+  });
+
+  const verifyMut = useMutation({
+    mutationFn: (docId: string) => verifyDocument(docId),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['kyc-docs', tenantId] });
+      qc.invalidateQueries({ queryKey: ['tenant', tenantId] });
+      toast.success('Document verified');
+    },
+    onError: () => toast.error('Failed to verify'),
+  });
+
+  const deleteMut = useMutation({
+    mutationFn: (docId: string) => deleteDocument(docId),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['kyc-docs', tenantId] });
+      toast.success('Document removed');
+    },
+    onError: () => toast.error('Failed to delete'),
+  });
+
+  const handleAdd = () => {
+    if (!docNumber.trim()) { setAddError('Document number is required'); return; }
+    setAddError('');
+    addMut.mutate();
+  };
+
+  return (
+    <div className="space-y-4">
+      <div className="card p-4">
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="text-sm font-semibold text-gray-700 flex items-center gap-2">
+            <ShieldCheck className="w-4 h-4 text-purple-500" />
+            KYC Documents
+          </h3>
+          <button
+            onClick={() => setShowAdd((v) => !v)}
+            className="btn-primary text-xs flex items-center gap-1.5 px-3 py-1.5"
+          >
+            <Plus className="w-3.5 h-3.5" /> Add Document
+          </button>
+        </div>
+
+        {showAdd && (
+          <div className="bg-gray-50 rounded-xl p-4 mb-4 space-y-3 border border-gray-200">
+            <div>
+              <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">
+                Document Type
+              </label>
+              <select
+                value={docType}
+                onChange={(e) => setDocType(e.target.value as DocumentType)}
+                className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-400"
+              >
+                {DOC_TYPES.map((t) => (
+                  <option key={t} value={t}>{DOC_TYPE_LABELS[t]}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">
+                Document Number
+              </label>
+              <input
+                type="text"
+                value={docNumber}
+                onChange={(e) => { setDocNumber(e.target.value); setAddError(''); }}
+                placeholder="e.g. 1234 5678 9012"
+                className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-400"
+              />
+              {addError && <p className="text-xs text-red-500 mt-1">{addError}</p>}
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">
+                File URL (optional)
+              </label>
+              <input
+                type="url"
+                value={fileUrl}
+                onChange={(e) => setFileUrl(e.target.value)}
+                placeholder="https://drive.google.com/..."
+                className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-400"
+              />
+            </div>
+            <div className="flex gap-2 pt-1">
+              <button onClick={() => setShowAdd(false)} className="btn-secondary text-xs flex-1 py-1.5">
+                Cancel
+              </button>
+              <button
+                onClick={handleAdd}
+                disabled={addMut.isPending}
+                className="btn-primary text-xs flex-1 py-1.5 disabled:opacity-50"
+              >
+                {addMut.isPending ? 'Saving...' : 'Save Document'}
+              </button>
+            </div>
+          </div>
+        )}
+
+        {isLoading ? (
+          <div className="py-6 flex justify-center">
+            <div className="w-6 h-6 border-2 border-primary-500 border-t-transparent rounded-full animate-spin" />
+          </div>
+        ) : docs.length === 0 ? (
+          <div className="py-8 text-center">
+            <ShieldCheck className="w-8 h-8 text-gray-300 mx-auto mb-2" />
+            <p className="text-sm text-gray-500">No documents uploaded yet.</p>
+            <p className="text-xs text-gray-400 mt-1">Add an Aadhaar, PAN, or other ID to complete KYC.</p>
+          </div>
+        ) : (
+          <div className="space-y-2">
+            {docs.map((doc: KycDocument) => (
+              <div
+                key={doc.id}
+                className="flex items-center justify-between rounded-xl border border-gray-100 px-4 py-3 hover:bg-gray-50 transition-colors"
+              >
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="text-sm font-semibold text-gray-800">{DOC_TYPE_LABELS[doc.type]}</span>
+                    {doc.verifiedAt ? (
+                      <span className="inline-flex items-center gap-1 text-xs font-medium text-green-700 bg-green-50 px-2 py-0.5 rounded-full">
+                        <ShieldCheck className="w-3 h-3" /> Verified
+                      </span>
+                    ) : (
+                      <span className="text-xs font-medium text-yellow-700 bg-yellow-50 px-2 py-0.5 rounded-full">
+                        Pending
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-xs text-gray-400 mt-0.5 font-mono">{doc.documentNumber}</p>
+                  {doc.verifiedAt && (
+                    <p className="text-xs text-gray-400 mt-0.5">Verified {formatDate(doc.verifiedAt)}</p>
+                  )}
+                </div>
+                <div className="flex items-center gap-3 shrink-0 ml-3">
+                  {doc.fileUrl && (
+                    <a
+                      href={doc.fileUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-xs text-indigo-600 hover:text-indigo-800 font-medium"
+                    >
+                      View
+                    </a>
+                  )}
+                  {!doc.verifiedAt && (
+                    <button
+                      onClick={() => verifyMut.mutate(doc.id)}
+                      disabled={verifyMut.isPending}
+                      className="text-xs font-medium text-green-600 hover:text-green-800 transition-colors disabled:opacity-50"
+                    >
+                      Verify
+                    </button>
+                  )}
+                  <button
+                    onClick={() => deleteMut.mutate(doc.id)}
+                    disabled={deleteMut.isPending}
+                    className="p-1 text-gray-300 hover:text-red-500 transition-colors disabled:opacity-50"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
   );
 }
 
