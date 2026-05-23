@@ -233,7 +233,7 @@ async function main() {
           floor: Math.floor(ri / 4) + 1,
           type: config.type,
           sharingCapacity: config.sharingCapacity,
-          monthlyRent: config.rent,
+          baseRent: config.rent,
           amenities: ri % 2 === 0 ? ['AC', 'Attached Bathroom'] : ['Fan', 'Common Bathroom'],
         },
       });

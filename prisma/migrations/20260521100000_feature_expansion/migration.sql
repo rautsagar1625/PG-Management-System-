@@ -18,23 +18,26 @@ CREATE UNIQUE INDEX IF NOT EXISTS "Property_slug_key" ON "Property"("slug");
 CREATE INDEX IF NOT EXISTS "Property_slug_idx" ON "Property"("slug");
 
 -- NotificationType enum additions
-DO $$ BEGIN
-  IF NOT EXISTS (SELECT 1 FROM pg_enum WHERE enumlabel = 'LEAD_ASSIGNED'       AND enumtypid = 'NotificationType'::regtype) THEN
+DO $$ DECLARE nt_oid OID;
+BEGIN
+  SELECT oid INTO nt_oid FROM pg_type WHERE typname = 'NotificationType';
+  IF nt_oid IS NULL THEN RETURN; END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_enum WHERE enumlabel = 'LEAD_ASSIGNED'       AND enumtypid = nt_oid) THEN
     ALTER TYPE "NotificationType" ADD VALUE 'LEAD_ASSIGNED';
   END IF;
-  IF NOT EXISTS (SELECT 1 FROM pg_enum WHERE enumlabel = 'AUTOPAY_ACTIVATED'   AND enumtypid = 'NotificationType'::regtype) THEN
+  IF NOT EXISTS (SELECT 1 FROM pg_enum WHERE enumlabel = 'AUTOPAY_ACTIVATED'   AND enumtypid = nt_oid) THEN
     ALTER TYPE "NotificationType" ADD VALUE 'AUTOPAY_ACTIVATED';
   END IF;
-  IF NOT EXISTS (SELECT 1 FROM pg_enum WHERE enumlabel = 'AUTOPAY_DEBIT'       AND enumtypid = 'NotificationType'::regtype) THEN
+  IF NOT EXISTS (SELECT 1 FROM pg_enum WHERE enumlabel = 'AUTOPAY_DEBIT'       AND enumtypid = nt_oid) THEN
     ALTER TYPE "NotificationType" ADD VALUE 'AUTOPAY_DEBIT';
   END IF;
-  IF NOT EXISTS (SELECT 1 FROM pg_enum WHERE enumlabel = 'AGREEMENT_READY'     AND enumtypid = 'NotificationType'::regtype) THEN
+  IF NOT EXISTS (SELECT 1 FROM pg_enum WHERE enumlabel = 'AGREEMENT_READY'     AND enumtypid = nt_oid) THEN
     ALTER TYPE "NotificationType" ADD VALUE 'AGREEMENT_READY';
   END IF;
-  IF NOT EXISTS (SELECT 1 FROM pg_enum WHERE enumlabel = 'AGREEMENT_SIGNED'    AND enumtypid = 'NotificationType'::regtype) THEN
+  IF NOT EXISTS (SELECT 1 FROM pg_enum WHERE enumlabel = 'AGREEMENT_SIGNED'    AND enumtypid = nt_oid) THEN
     ALTER TYPE "NotificationType" ADD VALUE 'AGREEMENT_SIGNED';
   END IF;
-  IF NOT EXISTS (SELECT 1 FROM pg_enum WHERE enumlabel = 'ATTENDANCE_REMINDER' AND enumtypid = 'NotificationType'::regtype) THEN
+  IF NOT EXISTS (SELECT 1 FROM pg_enum WHERE enumlabel = 'ATTENDANCE_REMINDER' AND enumtypid = nt_oid) THEN
     ALTER TYPE "NotificationType" ADD VALUE 'ATTENDANCE_REMINDER';
   END IF;
 END $$;
