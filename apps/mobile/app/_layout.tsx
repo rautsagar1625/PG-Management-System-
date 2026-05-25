@@ -10,6 +10,8 @@ import { api } from '../src/lib/api';
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
     shouldShowAlert: true,
+    shouldShowBanner: true,  // required by newer expo-notifications versions
+    shouldShowList: true,    // required by newer expo-notifications versions
     shouldPlaySound: true,
     shouldSetBadge: true,
     priority: Notifications.AndroidNotificationPriority.HIGH,
@@ -65,19 +67,22 @@ function RootGuard() {
         return;
       }
 
+      // Cast paths with `as never` — Expo Router's typed-routes only knows about
+      // statically registered screens; deep-link paths resolved at runtime are safe
+      // but not inferable at compile time.
       switch (data.type) {
         case 'RENT':
         case 'PAYMENT':
-          router.push(isOperator ? '/(operator)/collections' : '/(tenant)/payments');
+          router.push((isOperator ? '/(operator)/collections' : '/(tenant)/payments') as never);
           break;
         case 'COMPLAINT':
-          router.push(isOperator ? '/(operator)/complaints' : '/(tenant)/complaints');
+          router.push((isOperator ? '/(operator)/complaints' : '/(tenant)/complaints') as never);
           break;
         case 'AGREEMENT':
-          if (!isOperator) router.push('/(tenant)/agreements');
+          if (!isOperator) router.push('/(tenant)/agreements' as never);
           break;
         case 'SYSTEM':
-          if (!isOperator) router.push('/(tenant)/notifications');
+          if (!isOperator) router.push('/(tenant)/notifications' as never);
           break;
         default:
           // No deep-link action for unknown types

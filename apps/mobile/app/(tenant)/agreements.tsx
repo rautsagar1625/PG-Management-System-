@@ -38,8 +38,10 @@ interface AgreementCardProps {
   signing: boolean;
 }
 
+const DEFAULT_STATUS_CONFIG = { label: 'Unknown', color: '#374151', bg: '#f3f4f6', icon: 'document-outline' } as const;
+
 function AgreementCard({ agreement, onSign, signing }: AgreementCardProps) {
-  const cfg = STATUS_CONFIG[agreement.status] ?? STATUS_CONFIG.DRAFT;
+  const cfg = STATUS_CONFIG[agreement.status] ?? DEFAULT_STATUS_CONFIG;
   const canSign = agreement.status === 'SENT' && !agreement.signedByTenantAt;
   const [expanded, setExpanded] = useState(false);
 

@@ -215,7 +215,7 @@ export default function ProfileScreen() {
             <Section title="Account" icon="settings-outline">
               <TouchableOpacity
                 style={quickStyles.row}
-                onPress={() => router.push('/(tenant)/kyc')}
+                onPress={() => router.push('/(tenant)/kyc' as never)}
                 activeOpacity={0.8}
               >
                 <View style={quickStyles.iconWrap}>
@@ -229,7 +229,7 @@ export default function ProfileScreen() {
               </TouchableOpacity>
               <TouchableOpacity
                 style={quickStyles.row}
-                onPress={() => router.push('/(tenant)/agreements')}
+                onPress={() => router.push('/(tenant)/agreements' as never)}
                 activeOpacity={0.8}
               >
                 <View style={quickStyles.iconWrap}>

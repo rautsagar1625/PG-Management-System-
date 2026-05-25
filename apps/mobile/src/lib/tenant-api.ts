@@ -162,6 +162,7 @@ export async function getTenantAgreements(): Promise<TenantAgreement[]> {
 export async function signTenantAgreement(agreementId: string): Promise<TenantAgreement> {
   const res = await api.put<{ success: boolean; data: TenantAgreement }>(
     `/tenant/agreements/${agreementId}/sign`,
+    {}, // PUT requires a body; agreement signing has no payload
   );
   return res.data;
 }

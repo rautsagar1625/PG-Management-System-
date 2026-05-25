@@ -130,9 +130,9 @@ export default function RoomDetailPage() {
     id: b.id,
     label: b.label,
     status: b.status,
-    tenantName: b.allocations?.[0]?.tenant?.user?.name,
-    monthlyRent: b.allocations?.[0]?.monthlyRent
-      ? Number(b.allocations[0].monthlyRent)
+    tenantName: b.currentAllocation?.tenant?.user?.name,
+    monthlyRent: b.currentAllocation?.monthlyRent
+      ? Number(b.currentAllocation.monthlyRent)
       : Number(room.baseRent),
   }));
 
