@@ -36,6 +36,7 @@ model User {
   tenantProfile      Tenant?
   sessions           Session[]
   passwordResets     PasswordReset[]
+  deviceTokens       DeviceToken[]     // MA-001: push notification tokens per device
   notifications      Notification[]
   auditLogs          AuditLog[]
   complaintsRaised   Complaint[]       @relation("ComplaintRaisedBy")
@@ -57,6 +58,11 @@ model Session {
   id        String    @id @default(cuid())
   userId    String
   token     String    @unique
+  // RB-005: token family tracking — all rotated tokens from the same login share a
+  // familyId. If a stolen (already-revoked) refresh token is replayed, we detect
+  // it by the REVOKED status of the matching session record and revoke every session
+  // in the same family, forcing the attacker and legitimate user to re-authenticate.
+  familyId  String    // cuid — set at login/register, inherited by rotated tokens
   userAgent String?
   ipAddress String?
   expiresAt DateTime
@@ -67,6 +73,7 @@ model Session {
 
   @@index([token])
   @@index([userId])
+  @@index([familyId])
 }
 
 model PasswordReset {
@@ -75,12 +82,45 @@ model PasswordReset {
   token     String    @unique
   expiresAt DateTime
   usedAt    DateTime?
+  // NS-004: track email delivery outcome.
+  // If SMTP fails, the reset token exists in the DB but the user never receives the link.
+  // Support staff can detect this and resend, or escalate to check SMTP health.
+  emailSentAt   DateTime? // set when sendPasswordReset() succeeds
+  emailFailedAt DateTime? // set when sendPasswordReset() throws
+  emailError    String?   // first 500 chars of the error message
   createdAt DateTime  @default(now())
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([token])
   @@index([userId])
+}
+
+// MA-001 fix: Stores FCM (Android) and APNs (iOS) push notification tokens so
+// that the notification service can deliver rent reminders, complaint updates,
+// and move-out alerts to mobile devices. Previously there was no DeviceToken
+// model, making the entire mobile push notification system non-functional.
+//
+// Register token on mobile login; invalidate (delete) on logout.
+// token is unique — if FCM rotates a token, the old entry is replaced.
+model DeviceToken {
+  id        String         @id @default(cuid())
+  userId    String
+  token     String         @unique  // FCM registration token or APNs device token
+  platform  DevicePlatform
+  appVersion String?       // Client app version for debugging push failures
+  createdAt DateTime       @default(now())
+  updatedAt DateTime       @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+enum DevicePlatform {
+  IOS
+  ANDROID
+  WEB
 }
 
 enum SystemRole {
@@ -110,6 +150,13 @@ model Property {
   isPublicListed Boolean       @default(false) // Show on public /p/[slug] page
   wifiSSIDs     String[]       @default([])    // Registered WiFi SSIDs for attendance
   attendanceRadius Int         @default(200)   // GPS geofence radius in meters
+
+  // BM-004: GST compliance — applicable in states where PG rent > ₹7,500/month
+  // falls under GST. Zero-defaulted; enterprise clients opt in.
+  gstApplicable Boolean @default(false)
+  gstNumber     String? // GSTIN of the property owner/operator
+  gstRate       Decimal @default(0) @db.Decimal(5, 2) // e.g. 18.00 for 18%
+
   createdAt     DateTime       @default(now())
   updatedAt     DateTime       @updatedAt
 
@@ -278,6 +325,10 @@ model Tenant {
   moveOutDate      DateTime?
   noticeDate       DateTime?
   archivedAt       DateTime?
+  // SP4-6: DPDP-lite — records when PII was scrubbed. Non-null means this record
+  // has been anonymised and direct PII (User.name, User.phone, document numbers,
+  // emergency contacts) has been redacted.
+  anonymisedAt     DateTime?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -428,6 +479,9 @@ model FinancialModel {
   fixedOwnerPayout     Decimal?           @db.Decimal(10, 2) // FIXED_PAYOUT only
   ownerSharePercent    Decimal?           @db.Decimal(5, 2)  // REVENUE_SHARE only
   operatorSharePercent Decimal?           @db.Decimal(5, 2)  // REVENUE_SHARE only
+  // BM-004: deposit interest — some PGs credit tenants with interest on deposit
+  // held > 12 months. Zero-default; opt-in per financial model.
+  depositInterestRate  Decimal            @default(0) @db.Decimal(5, 2) // annual %, e.g. 6.00
   isActive             Boolean            @default(true)
   effectiveFrom        DateTime
   effectiveTo          DateTime?
@@ -438,6 +492,8 @@ model FinancialModel {
   settlements Settlement[]
 
   @@index([propertyId, isActive])
+  // SP5-3: settlement period query: WHERE effectiveFrom <= X ORDER BY effectiveFrom DESC
+  @@index([propertyId, effectiveFrom])
 }
 
 model RentCycle {
@@ -490,6 +546,7 @@ model Payment {
   receipt   Receipt?
 
   @@index([tenantId])
+  @@index([tenantId, paidAt])      // PF-003: rent history queries sorted by date (was full scan)
   @@index([propertyId, type, paidAt])
   @@index([rentCycleId])
   @@index([referenceNo])
@@ -828,6 +885,8 @@ model Lead {
   @@index([propertyId, status])
   @@index([phone])
   @@index([createdAt])
+  // SP5-6: "My leads" / team-assignment filter — common CRM query pattern
+  @@index([propertyId, assignedTo])
 }
 
 enum LeadSource {
