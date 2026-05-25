@@ -234,8 +234,8 @@ describe('RentService', () => {
       const result = await service.recordPayment(validDto, 'op-user');
 
       expect(result).toBeDefined();
-      // Cache invalidation should have been triggered (delPattern for operator dashboards)
-      expect(mockCache.delPattern).toHaveBeenCalledWith('dashboard:operator:*');
+      // PF-002: cache invalidation is now property-scoped, not global
+      expect(mockCache.delPattern).toHaveBeenCalledWith('dashboard:operator:prop-1:*');
     });
   });
 });

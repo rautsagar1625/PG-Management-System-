@@ -20,27 +20,46 @@ export class ExportController {
   constructor(private exportService: ExportService) {}
 
   @Get('collections')
-  @ApiOperation({ summary: 'Export rent collections as CSV or XLSX' })
+  @ApiOperation({
+    summary: 'Export rent collections as CSV or XLSX',
+    description:
+      'Use mode=cycle-month (default) for accrual-basis ("what was owed in May?") or ' +
+      'mode=payment-date with paidFrom/paidTo for cash-basis ("what was received between May 1–31?").',
+  })
   @ApiQuery({ name: 'propertyId', required: true })
   @ApiQuery({ name: 'month', required: true })
   @ApiQuery({ name: 'year', required: true })
   @ApiQuery({ name: 'format', enum: ['csv', 'xlsx'], required: false })
+  @ApiQuery({ name: 'mode', enum: ['cycle-month', 'payment-date'], required: false })
+  @ApiQuery({ name: 'paidFrom', required: false, description: 'ISO date, required when mode=payment-date' })
+  @ApiQuery({ name: 'paidTo', required: false, description: 'ISO date, required when mode=payment-date' })
   async exportCollections(
     @Query('propertyId') propertyId: string,
     @Query('month') month: string,
     @Query('year') year: string,
     @Query('format') format: ExportFormat = 'xlsx',
+    @Query('mode') mode: string = 'cycle-month',
+    @Query('paidFrom') paidFrom: string | undefined,
+    @Query('paidTo') paidTo: string | undefined,
     @Res() reply: FReply,
   ) {
+    const dateFilter =
+      mode === 'payment-date' && paidFrom && paidTo
+        ? { mode: 'payment-date' as const, from: new Date(paidFrom), to: new Date(paidTo + 'T23:59:59Z') }
+        : { mode: 'cycle-month' as const };
+
     const result = await this.exportService.exportCollections(
       propertyId,
       Number(month),
       Number(year),
       format,
+      dateFilter,
     );
     reply
       .header('Content-Type', result.mimeType)
       .header('Content-Disposition', `attachment; filename="${result.filename}"`)
+      .header('X-Export-Row-Count', String(result.rowCount))
+      .header('X-Export-Truncated', result.truncated ? 'true' : 'false')
       .send(result.buffer);
   }
 
@@ -57,6 +76,8 @@ export class ExportController {
     reply
       .header('Content-Type', result.mimeType)
       .header('Content-Disposition', `attachment; filename="${result.filename}"`)
+      .header('X-Export-Row-Count', String(result.rowCount))
+      .header('X-Export-Truncated', result.truncated ? 'true' : 'false')
       .send(result.buffer);
   }
 
@@ -73,6 +94,8 @@ export class ExportController {
     reply
       .header('Content-Type', result.mimeType)
       .header('Content-Disposition', `attachment; filename="${result.filename}"`)
+      .header('X-Export-Row-Count', String(result.rowCount))
+      .header('X-Export-Truncated', result.truncated ? 'true' : 'false')
       .send(result.buffer);
   }
 
@@ -95,6 +118,8 @@ export class ExportController {
     reply
       .header('Content-Type', result.mimeType)
       .header('Content-Disposition', `attachment; filename="${result.filename}"`)
+      .header('X-Export-Row-Count', String(result.rowCount))
+      .header('X-Export-Truncated', result.truncated ? 'true' : 'false')
       .send(result.buffer);
   }
 }

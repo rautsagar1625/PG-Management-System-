@@ -145,6 +145,86 @@ export class RoomsService {
     return { success: true, data: room };
   }
 
+  /**
+   * UX-005 — Available beds lookup for the room-transfer UI.
+   *
+   * Returns a flat, human-readable list of beds that are currently AVAILABLE
+   * (no active allocation AND bed.status === AVAILABLE). The UI binds bedId
+   * as the value and shows "{roomNumber} › Bed {bedLabel}" as the label,
+   * eliminating the need for operators to know raw cuids.
+   *
+   * Optional filters:
+   *   floorFilter — restrict to a specific floor
+   *   excludeTenantId — exclude the bed currently held by this tenant
+   *                     (prevents a transfer "to the same bed")
+   */
+  async getAvailableBeds(
+    propertyId: string,
+    options: { floorFilter?: number; excludeTenantId?: string } = {},
+  ) {
+    const beds = await this.prisma.bed.findMany({
+      where: {
+        status: 'AVAILABLE',
+        room: {
+          propertyId,
+          status: 'AVAILABLE',
+          ...(options.floorFilter !== undefined && { floor: options.floorFilter }),
+        },
+        // Exclude beds with an active allocation (double-safety beyond status)
+        allocations: { none: { isActive: true } },
+      },
+      select: {
+        id: true,
+        label: true,
+        room: {
+          select: {
+            id: true,
+            number: true,
+            floor: true,
+            type: true,
+            baseRent: true,
+            sharingCapacity: true,
+          },
+        },
+      },
+      orderBy: [
+        { room: { floor: 'asc' } },
+        { room: { number: 'asc' } },
+        { label: 'asc' },
+      ],
+    });
+
+    // Exclude the bed currently held by the tenant being transferred
+    let excludedBedId: string | undefined;
+    if (options.excludeTenantId) {
+      const currentAlloc = await this.prisma.tenantAllocation.findFirst({
+        where: { tenantId: options.excludeTenantId, isActive: true },
+        select: { bedId: true },
+      });
+      excludedBedId = currentAlloc?.bedId;
+    }
+
+    const filtered = excludedBedId ? beds.filter((b) => b.id !== excludedBedId) : beds;
+
+    return {
+      success: true,
+      data: filtered.map((b) => ({
+        bedId: b.id,
+        bedLabel: b.label,
+        displayLabel: `Floor ${b.room.floor ?? '–'} · Room ${b.room.number} › Bed ${b.label}`,
+        room: {
+          id: b.room.id,
+          number: b.room.number,
+          floor: b.room.floor,
+          type: b.room.type,
+          baseRent: Number(b.room.baseRent),
+          sharingCapacity: b.room.sharingCapacity,
+        },
+      })),
+      meta: { total: filtered.length },
+    };
+  }
+
   private generateBedLabels(capacity: number): string[] {
     const labels = ['A', 'B', 'C', 'D', 'E', 'F'];
     return labels.slice(0, capacity);

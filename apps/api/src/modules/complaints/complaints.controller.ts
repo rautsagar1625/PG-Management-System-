@@ -17,15 +17,23 @@ export class ComplaintsController {
   constructor(private complaintsService: ComplaintsService) {}
 
   @Get()
-  @ApiOperation({ summary: 'List complaints for a property' })
-  @ApiResponse({ status: 200, description: 'Filtered list of complaints' })
+  @ApiOperation({ summary: 'List complaints for a property (cursor-paginated)' })
+  @ApiResponse({ status: 200, description: 'Paginated list of complaints with hasMore + nextCursor' })
   @ApiAuthResponses()
   @PropertyRoles('OWNER', 'OPERATOR', 'CO_OPERATOR', 'STAFF')
   findAll(
     @Query('propertyId') propertyId: string,
-    @Query() filters: { status?: string; category?: string },
+    @Query('status') status?: string,
+    @Query('category') category?: string,
+    @Query('cursor') cursor?: string,
+    @Query('limit') limit?: string,
   ) {
-    return this.complaintsService.findAll(propertyId, filters);
+    return this.complaintsService.findAll(propertyId, {
+      status,
+      category,
+      cursor,
+      limit: limit ? parseInt(limit, 10) : undefined,
+    });
   }
 
   @Post()

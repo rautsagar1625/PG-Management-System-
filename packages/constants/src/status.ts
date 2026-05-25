@@ -76,7 +76,7 @@ export const TENANT_STATUS_TRANSITIONS: Record<string, string[]> = {
   NOTICE_PERIOD:       ['MOVED_OUT', 'ACTIVE'],   // allow cancelling notice
   MOVED_OUT:           ['ARCHIVED'],
   ARCHIVED:            [],
-  REJECTED:            [],
+  REJECTED:            ['LEAD'], // TL-003: re-engage when rooms become available
 };
 
 export const KYC_STATUSES = {

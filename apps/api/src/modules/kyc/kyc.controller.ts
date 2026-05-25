@@ -14,10 +14,11 @@ export class KycController {
   constructor(private kycService: KycService) {}
 
   @Get('tenant/:tenantId')
-  @ApiOperation({ summary: 'Get all KYC documents for a tenant' })
+  @ApiOperation({ summary: 'Get all KYC documents for a tenant (access is audit-logged)' })
   @PropertyRoles('OWNER', 'OPERATOR', 'CO_OPERATOR', 'STAFF')
-  getDocuments(@Param('tenantId') tenantId: string) {
-    return this.kycService.getDocuments(tenantId);
+  getDocuments(@Param('tenantId') tenantId: string, @CurrentUser() ctx: RequestContext) {
+    // ER-004: pass the actor userId so the audit log records who viewed the documents
+    return this.kycService.getDocuments(tenantId, ctx.userId);
   }
 
   @Post()

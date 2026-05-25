@@ -139,6 +139,34 @@ export class RentService {
       }
     }
 
+    // FS-003 fix: Cash payments have no referenceNo, so double-clicks / network
+    // retries can create two identical records. Guard against same amount recorded
+    // for the same cycle on the same calendar day via a same-day duplicate check.
+    if (dto.method === 'CASH' && dto.rentCycleId) {
+      const paymentDate = new Date(dto.paidAt);
+      const dayStart = new Date(paymentDate);
+      dayStart.setHours(0, 0, 0, 0);
+      const dayEnd = new Date(paymentDate);
+      dayEnd.setHours(23, 59, 59, 999);
+
+      const sameDayCash = await this.prisma.payment.findFirst({
+        where: {
+          tenantId: dto.tenantId,
+          rentCycleId: dto.rentCycleId,
+          method: 'CASH',
+          amount: new Prisma.Decimal(dto.amount),
+          paidAt: { gte: dayStart, lte: dayEnd },
+        },
+        select: { id: true },
+      });
+      if (sameDayCash) {
+        throw new ConflictException(
+          'Duplicate cash payment: identical amount already recorded for this cycle today. ' +
+          'If this is intentional (split payment), use a different paidAt time.',
+        );
+      }
+    }
+
     const result = await this.prisma.$transaction(async (tx) => {
       const tenant = await tx.tenant.findUnique({
         where: { id: dto.tenantId },
@@ -271,10 +299,12 @@ export class RentService {
 
     // Invalidate dashboard caches that depend on this property's rent data.
     // Fire-and-forget — cache invalidation is best-effort; don't block the response.
-    void this.cache.delPattern('dashboard:operator:*').catch(() => undefined);
-    void this.cache.del(
-      `dashboard:property:${result.propertyId}:${new Date().getFullYear()}-${new Date().getMonth() + 1}`,
-    ).catch(() => undefined);
+    // PF-002 fix: use property-scoped pattern instead of global 'dashboard:operator:*'
+    // so we only scan/delete keys for this property, not every operator on the platform.
+    const now = new Date();
+    const monthKey = `${now.getFullYear()}-${now.getMonth() + 1}`;
+    void this.cache.delPattern(`dashboard:operator:${result.propertyId}:*`).catch(() => undefined);
+    void this.cache.del(`dashboard:property:${result.propertyId}:${monthKey}`).catch(() => undefined);
 
     return { payment: result.payment, receiptNo: result.receiptNo };
   }
@@ -482,9 +512,13 @@ export class RentService {
     const graceCutoff = new Date();
     graceCutoff.setDate(graceCutoff.getDate() - RENT_GRACE_PERIOD_DAYS);
 
+    // FS-002 fix: include PENDING here so the manual trigger and the BullMQ
+    // cron processor use the same eligible-status set and produce identical results.
+    // Previously only ['DUE', 'PARTIAL'] was checked, causing the manual trigger
+    // to under-report overdue amounts compared to the automated cron run.
     const { count } = await this.prisma.rentCycle.updateMany({
       where: {
-        status: { in: ['DUE', 'PARTIAL'] },
+        status: { in: [RentCycleStatus.PENDING, RentCycleStatus.DUE, RentCycleStatus.PARTIAL] },
         dueDate: { lt: graceCutoff },
       },
       data: { status: RentCycleStatus.OVERDUE },

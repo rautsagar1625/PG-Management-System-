@@ -115,6 +115,23 @@ export class CacheService implements OnModuleInit, OnModuleDestroy {
     }
   }
 
+  // ── Health ──────────────────────────────────────────────────────────────────
+
+  /**
+   * PR-001 fix: Returns true when the Redis connection is alive.
+   * Used by the health controller so Kubernetes readiness probes detect
+   * Redis outages before routing traffic to a degraded instance.
+   */
+  async ping(): Promise<boolean> {
+    if (!this.client || !this.isEnabled) return false;
+    try {
+      const pong = await this.client.ping();
+      return pong === 'PONG';
+    } catch {
+      return false;
+    }
+  }
+
   // ── Convenience wrapper ─────────────────────────────────────────────────────
 
   /**

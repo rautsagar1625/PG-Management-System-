@@ -32,15 +32,19 @@ export class SettlementsController {
     );
   }
 
+  // RB-001/RB-002 fix: propertyId is now required in the body so the
+  // PropertyRoleGuard can extract it and verify the caller has OWNER/OPERATOR
+  // access on that specific property. The service also verifies the settlement
+  // belongs to that property (cross-property data leak prevention).
   @Put(':id/mark-paid')
   @ApiOperation({ summary: 'Mark settlement as paid by owner' })
   @PropertyRoles('OWNER', 'OPERATOR')
   markPaid(
     @Param('id') id: string,
-    @Body() body: { notes?: string },
+    @Body() body: { propertyId: string; notes?: string },
     @CurrentUser() ctx: RequestContext,
   ) {
-    return this.settlementsService.markSettlementPaid(id, ctx.userId, body.notes);
+    return this.settlementsService.markSettlementPaid(id, ctx.userId, body.propertyId, body.notes);
   }
 
   @Get('property/:propertyId')
@@ -53,10 +57,17 @@ export class SettlementsController {
     return this.settlementsService.getSettlements(propertyId, year);
   }
 
+  // RB-001/RB-002 fix: propertyId is now required as a query param so the
+  // PropertyRoleGuard can extract it. Previously the guard had no propertyId to
+  // check and either blocked everyone (403) or allowed all authenticated users
+  // to read any settlement by ID (financial data leak across properties).
   @Get(':id')
-  @ApiOperation({ summary: 'Get settlement detail by ID' })
+  @ApiOperation({ summary: 'Get settlement detail by ID — requires ?propertyId=<id>' })
   @PropertyRoles('OWNER', 'OPERATOR')
-  getSettlement(@Param('id') id: string) {
-    return this.settlementsService.getSettlement(id);
+  getSettlement(
+    @Param('id') id: string,
+    @Query('propertyId') propertyId: string,
+  ) {
+    return this.settlementsService.getSettlement(id, propertyId);
   }
 }

@@ -1,6 +1,7 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { DocumentType } from '@prisma/client';
 import { PrismaService } from '../../database/prisma.service';
+import { AuditService } from '../audit/audit.service';
 
 export interface CreateDocumentDto {
   tenantId: string;
@@ -11,13 +12,38 @@ export interface CreateDocumentDto {
 
 @Injectable()
 export class KycService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private audit: AuditService,
+  ) {}
 
-  async getDocuments(tenantId: string) {
+  /**
+   * ER-004: Every operator read of KYC documents is logged to the audit trail.
+   * KYC documents contain Aadhaar/PAN/passport numbers — PII that must have a
+   * full access history for compliance (data protection audits, police verification).
+   *
+   * @param tenantId - whose documents are being accessed
+   * @param accessedByUserId - the operator/staff user making the request
+   */
+  async getDocuments(tenantId: string, accessedByUserId?: string) {
     const docs = await this.prisma.tenantDocument.findMany({
       where: { tenantId },
       orderBy: { createdAt: 'desc' },
     });
+
+    // Fire-and-forget — document access audit must never block the response
+    void this.audit.log({
+      action: 'KYC_DOCUMENTS_VIEWED',
+      entity: 'TenantDocument',
+      entityId: tenantId,
+      userId: accessedByUserId,
+      metadata: {
+        documentCount: docs.length,
+        documentTypes: docs.map((d) => d.type),
+        accessedAt: new Date().toISOString(),
+      },
+    });
+
     return { success: true, data: docs };
   }
 

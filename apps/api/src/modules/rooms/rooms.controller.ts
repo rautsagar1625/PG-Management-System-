@@ -1,5 +1,5 @@
-import { Body, Controller, Get, Param, Patch, Post, UseGuards } from '@nestjs/common';
-import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
+import { Body, Controller, Get, Param, Patch, Post, Query, UseGuards } from '@nestjs/common';
+import { ApiBearerAuth, ApiOperation, ApiQuery, ApiTags } from '@nestjs/swagger';
 
 import { PropertyRoles } from '../../common/decorators/roles.decorator';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
@@ -17,6 +17,26 @@ export class RoomsController {
   @ApiOperation({ summary: 'List all rooms in a property' })
   findAll(@Param('propertyId') propertyId: string) {
     return this.roomsService.findByProperty(propertyId);
+  }
+
+  @Get('available-beds')
+  @ApiOperation({
+    summary: 'List available beds for room transfer — returns bedId + human-readable label',
+    description:
+      'Use this endpoint to populate the room-transfer dropdown. ' +
+      'Pass excludeTenantId to omit the bed the tenant currently occupies.',
+  })
+  @ApiQuery({ name: 'floor', required: false, description: 'Restrict to a specific floor number' })
+  @ApiQuery({ name: 'excludeTenantId', required: false, description: "Exclude this tenant's current bed" })
+  getAvailableBeds(
+    @Param('propertyId') propertyId: string,
+    @Query('floor') floor?: string,
+    @Query('excludeTenantId') excludeTenantId?: string,
+  ) {
+    return this.roomsService.getAvailableBeds(propertyId, {
+      floorFilter: floor !== undefined ? Number(floor) : undefined,
+      excludeTenantId,
+    });
   }
 
   @Post()

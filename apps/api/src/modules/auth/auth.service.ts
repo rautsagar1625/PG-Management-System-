@@ -7,7 +7,7 @@ import {
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcryptjs';
-import { randomBytes } from 'crypto';
+import { randomBytes, randomUUID } from 'crypto';
 
 import type { AuthResponse, AuthTokenPayload, AuthTokens, UserProfile } from '@pg-system/types';
 
@@ -45,7 +45,8 @@ export class AuthService {
     });
 
     const tokens = await this.generateTokens(user.id, user.email, user.systemRole);
-    await this.saveRefreshToken(user.id, tokens.refreshToken);
+    // New login = new token family
+    await this.saveRefreshToken(user.id, tokens.refreshToken, randomUUID());
 
     return {
       user: this.toUserProfile(user),
@@ -66,7 +67,8 @@ export class AuthService {
     });
 
     const tokens = await this.generateTokens(user.id, user.email, user.systemRole);
-    await this.saveRefreshToken(user.id, tokens.refreshToken);
+    // New login = new token family
+    await this.saveRefreshToken(user.id, tokens.refreshToken, randomUUID());
 
     return { user: this.toUserProfile(user), tokens };
   }
@@ -77,10 +79,26 @@ export class AuthService {
       include: { user: true },
     });
 
+    // RB-005: Token reuse detection.
+    // A valid (non-expired) session that is already revoked signals that a previously
+    // issued token was replayed — the most likely cause is token theft.
+    // When detected, revoke the ENTIRE token family to force re-authentication
+    // for both the legitimate user and the attacker.
+    if (stored && stored.revokedAt && stored.expiresAt > new Date()) {
+      await this.prisma.session.updateMany({
+        where: { familyId: stored.familyId, revokedAt: null },
+        data: { revokedAt: new Date() },
+      });
+      throw new UnauthorizedException(
+        'Refresh token reuse detected — all sessions in this family have been revoked. Please log in again.',
+      );
+    }
+
     if (!stored || stored.revokedAt || stored.expiresAt < new Date()) {
       throw new UnauthorizedException('Invalid or expired refresh token');
     }
 
+    // Rotate: revoke the used token and issue a new one in the same family
     await this.prisma.session.update({
       where: { id: stored.id },
       data: { revokedAt: new Date() },
@@ -91,7 +109,8 @@ export class AuthService {
       stored.user.email,
       stored.user.systemRole,
     );
-    await this.saveRefreshToken(stored.user.id, tokens.refreshToken);
+    // Inherit the family so reuse detection works across multiple rotations
+    await this.saveRefreshToken(stored.user.id, tokens.refreshToken, stored.familyId);
 
     return tokens;
   }
@@ -111,8 +130,26 @@ export class AuthService {
     const token = randomBytes(32).toString('hex');
     const expiresAt = new Date(Date.now() + 60 * 60 * 1000); // 1 hour
 
-    await this.prisma.passwordReset.create({ data: { userId: user.id, token, expiresAt } });
-    await this.email.sendPasswordReset(user.email, user.name, token);
+    const resetRecord = await this.prisma.passwordReset.create({
+      data: { userId: user.id, token, expiresAt },
+    });
+
+    // NS-004: track email delivery — if SMTP is down, we record the failure so
+    // support staff can detect it and resend manually or check SMTP health.
+    // We never throw to the caller (always return void — avoids user enumeration).
+    try {
+      await this.email.sendPasswordReset(user.email, user.name, token);
+      await this.prisma.passwordReset.update({
+        where: { id: resetRecord.id },
+        data: { emailSentAt: new Date() },
+      });
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message.slice(0, 500) : String(err).slice(0, 500);
+      await this.prisma.passwordReset.update({
+        where: { id: resetRecord.id },
+        data: { emailFailedAt: new Date(), emailError: msg },
+      }).catch(() => undefined); // don't let audit write block the response
+    }
   }
 
   async resetPassword(dto: ResetPasswordDto): Promise<void> {
@@ -155,11 +192,11 @@ export class AuthService {
     return { accessToken, refreshToken, expiresIn };
   }
 
-  private async saveRefreshToken(userId: string, token: string): Promise<void> {
+  private async saveRefreshToken(userId: string, token: string, familyId: string): Promise<void> {
     const expiresAt = new Date();
     expiresAt.setDate(expiresAt.getDate() + 7);
 
-    await this.prisma.session.create({ data: { userId, token, expiresAt } });
+    await this.prisma.session.create({ data: { userId, token, familyId, expiresAt } });
   }
 
   private toUserProfile(user: {

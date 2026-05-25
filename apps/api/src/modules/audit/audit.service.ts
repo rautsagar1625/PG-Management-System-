@@ -14,6 +14,28 @@ export interface LogEventParams {
   metadata?: Record<string, unknown>;
 }
 
+// AL-002: Cap JSON payload size to prevent audit log table bloat.
+// Large entities (Tenant with eager-loaded relations) can be 100 KB+.
+// We store a truncated snapshot — enough for human review, not a full DB dump.
+const AUDIT_PAYLOAD_MAX_BYTES = 10_240; // 10 KB per before/after field
+
+function truncatePayload(
+  obj: Record<string, unknown> | undefined,
+): Record<string, unknown> | undefined {
+  if (!obj) return obj;
+  const json = JSON.stringify(obj);
+  if (json.length <= AUDIT_PAYLOAD_MAX_BYTES) return obj;
+  // Return a sentinel indicating truncation; include the first few keys for context
+  const keys = Object.keys(obj).slice(0, 10);
+  const preview: Record<string, unknown> = {};
+  for (const k of keys) preview[k] = obj[k];
+  return {
+    __truncated: true,
+    __originalSizeBytes: json.length,
+    __preview: preview,
+  };
+}
+
 @Injectable()
 export class AuditService {
   constructor(private prisma: PrismaService) {}
@@ -30,8 +52,8 @@ export class AuditService {
         entityId: params.entityId,
         propertyId: params.propertyId,
         userId: params.userId,
-        before: params.before as Prisma.InputJsonValue,
-        after: params.after as Prisma.InputJsonValue,
+        before: truncatePayload(params.before) as Prisma.InputJsonValue,
+        after: truncatePayload(params.after) as Prisma.InputJsonValue,
         metadata: params.metadata as Prisma.InputJsonValue,
       },
     });
@@ -47,8 +69,8 @@ export class AuditService {
           entityId: params.entityId,
           propertyId: params.propertyId,
           userId: params.userId,
-          before: params.before as Prisma.InputJsonValue,
-          after: params.after as Prisma.InputJsonValue,
+          before: truncatePayload(params.before) as Prisma.InputJsonValue,
+          after: truncatePayload(params.after) as Prisma.InputJsonValue,
           metadata: params.metadata as Prisma.InputJsonValue,
         },
       });

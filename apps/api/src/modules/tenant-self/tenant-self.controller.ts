@@ -1,4 +1,5 @@
-import { Body, Controller, Get, Post, Put, Param, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Post, Put, Param, Query, UseGuards } from '@nestjs/common';
+import { Throttle } from '@nestjs/throttler';
 import { ApiBearerAuth, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 import type { RequestContext } from '@pg-system/types';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
@@ -28,11 +29,18 @@ export class TenantSelfController {
   }
 
   @Get('rent-history')
-  @ApiOperation({ summary: "Get tenant's rent cycle history" })
-  @ApiResponse({ status: 200, description: 'List of all rent cycles for this tenant' })
+  @ApiOperation({ summary: "Get tenant's rent cycle history (cursor-paginated)" })
+  @ApiResponse({ status: 200, description: 'Paginated rent cycles — newest first. Pass nextCursor for subsequent pages.' })
   @ApiAuthResponses()
-  getRentHistory(@CurrentUser() ctx: RequestContext) {
-    return this.tenantSelfService.getRentHistory(ctx.userId);
+  getRentHistory(
+    @CurrentUser() ctx: RequestContext,
+    @Query('limit') limit?: string,
+    @Query('cursor') cursor?: string,
+  ) {
+    return this.tenantSelfService.getRentHistory(ctx.userId, {
+      limit: limit ? parseInt(limit, 10) : undefined,
+      cursor,
+    });
   }
 
   @Get('complaints')
@@ -99,6 +107,10 @@ export class TenantSelfController {
     return this.tenantSelfService.signAgreement(ctx.userId, id);
   }
 
+  // SP5-2: Strict throttle on payment endpoints.
+  // create-order: 10 per minute — prevents order-flooding that would create
+  // dangling Razorpay orders and skew reconciliation reports.
+  @Throttle({ default: { limit: 10, ttl: 60_000 } })
   @Post('pay/create-order')
   @ApiOperation({ summary: 'Create a Razorpay order for online rent payment' })
   @ApiResponse({ status: 201, description: 'Razorpay order created — returns orderId, amount, keyId' })
@@ -112,6 +124,8 @@ export class TenantSelfController {
     return this.tenantSelfService.createPaymentOrder(ctx.userId, dto);
   }
 
+  // verify: 20 per minute — slightly more lenient (retries after network errors are legitimate)
+  @Throttle({ default: { limit: 20, ttl: 60_000 } })
   @Post('pay/verify')
   @ApiOperation({ summary: 'Verify Razorpay payment and record it' })
   @ApiResponse({ status: 201, description: 'Payment verified and recorded in rent cycle' })

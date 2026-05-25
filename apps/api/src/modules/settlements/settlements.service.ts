@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma, SettlementStatus } from '@prisma/client';
 
 import {
@@ -20,18 +20,34 @@ export class SettlementsService {
     const property = await this.prisma.property.findUnique({ where: { id: propertyId } });
     if (!property) throw new NotFoundException('Property not found');
 
+    // BM-001 fix: Query for the financial model that was ACTIVE at the START of the
+    // settlement period, not the model that is active today. If an owner changed from
+    // REVENUE_SHARE to FIXED_PAYOUT on the 20th, settlements for that month should
+    // still use REVENUE_SHARE — the model that was in effect when collections happened.
+    //
+    // The FinancialModel table uses effectiveFrom / effectiveTo for history. We find
+    // the model where effectiveFrom <= periodStart AND (effectiveTo IS NULL OR effectiveTo >= periodStart).
+    const monthStart = new Date(year, month - 1, 1);
+    const monthEnd = new Date(year, month, 0, 23, 59, 59);
+
     const financialModel = await this.prisma.financialModel.findFirst({
-      where: { propertyId, isActive: true },
-      orderBy: { effectiveFrom: 'desc' },
+      where: {
+        propertyId,
+        effectiveFrom: { lte: monthStart },
+        OR: [
+          { effectiveTo: null },             // currently active model
+          { effectiveTo: { gte: monthStart } }, // model whose end date is within or after period start
+        ],
+      },
+      orderBy: { effectiveFrom: 'desc' }, // most recent matching model wins
     });
 
     if (!financialModel) {
-      throw new BadRequestException('No active financial model configured for this property');
+      throw new BadRequestException(
+        `No financial model was active at the start of ${month}/${year} for this property. ` +
+        'Ensure a financial model with effectiveFrom on or before this period exists.',
+      );
     }
-
-    // Sum all rent payments collected this month
-    const monthStart = new Date(year, month - 1, 1);
-    const monthEnd = new Date(year, month, 0, 23, 59, 59);
 
     const rentAgg = await this.prisma.payment.aggregate({
       where: {
@@ -62,10 +78,18 @@ export class SettlementsService {
       );
       ownerPayout = result.ownerPayout;
       operatorProfit = result.operatorProfit;
-    } else {
-      // OWNER_OPERATED: owner keeps everything
+    } else if (financialModel.type === 'OWNER_OPERATED') {
+      // OWNER_OPERATED: owner keeps everything — no split
       ownerPayout = totalCollected;
       operatorProfit = 0;
+    } else {
+      // SP4-3: TypeScript exhaustiveness check.
+      // `financialModel.type` is narrowed to `never` here because all enum
+      // variants are handled above. If a new FinancialModelType is added to
+      // the Prisma schema without a corresponding branch, this line becomes
+      // a compile-time error — preventing silent misrouting at runtime.
+      const _exhaustive: never = financialModel.type;
+      throw new Error(`Unhandled financial model type: ${_exhaustive}`);
     }
 
     // Build breakdown for audit trail
@@ -123,9 +147,23 @@ export class SettlementsService {
     return { success: true, data: settlement };
   }
 
-  async markSettlementPaid(settlementId: string, settledBy: string, notes?: string) {
+  async markSettlementPaid(
+    settlementId: string,
+    settledBy: string,
+    // RB-001/RB-002 fix: callers must supply the propertyId they believe this
+    // settlement belongs to. The service verifies the match so that an OPERATOR
+    // on Property A cannot mark a settlement from Property B as paid.
+    propertyId: string,
+    notes?: string,
+  ) {
     const settlement = await this.prisma.settlement.findUnique({ where: { id: settlementId } });
     if (!settlement) throw new NotFoundException('Settlement not found');
+
+    // Cross-property access check — prevent operators from touching other properties' settlements
+    if (settlement.propertyId !== propertyId) {
+      throw new ForbiddenException('Settlement does not belong to the specified property');
+    }
+
     if (settlement.status !== 'CALCULATED') {
       throw new BadRequestException('Only CALCULATED settlements can be marked as paid');
     }
@@ -143,7 +181,14 @@ export class SettlementsService {
     return { success: true, data: updated };
   }
 
-  async getSettlement(id: string) {
+  async getSettlement(
+    id: string,
+    // RB-001/RB-002 fix: propertyId supplied by the caller (extracted from the
+    // request by PropertyRoleGuard via query param). The service verifies that the
+    // fetched settlement actually belongs to this property, blocking cross-property
+    // reads where a user on Property A guesses a settlement ID from Property B.
+    propertyId: string,
+  ) {
     const settlement = await this.prisma.settlement.findUnique({
       where: { id },
       include: {
@@ -152,6 +197,12 @@ export class SettlementsService {
       },
     });
     if (!settlement) throw new NotFoundException('Settlement not found');
+
+    // Verify the settlement belongs to the claimed property
+    if (settlement.propertyId !== propertyId) {
+      throw new ForbiddenException('Settlement does not belong to the specified property');
+    }
+
     return { success: true, data: settlement };
   }
 

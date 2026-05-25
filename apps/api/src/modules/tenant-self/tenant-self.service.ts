@@ -152,12 +152,15 @@ export class TenantSelfService {
     };
   }
 
-  async getRentHistory(userId: string) {
+  async getRentHistory(userId: string, options: { limit?: number; cursor?: string } = {}) {
     const tenantId = await this.resolveTenantId(userId);
+    const limit = Math.min(Math.max(options.limit ?? 12, 1), 60);
 
     const cycles = await this.prisma.rentCycle.findMany({
       where: { tenantId },
       orderBy: [{ year: 'desc' }, { month: 'desc' }],
+      take: limit + 1,
+      ...(options.cursor ? { cursor: { id: options.cursor }, skip: 1 } : {}),
       select: {
         id: true,
         month: true,
@@ -170,9 +173,13 @@ export class TenantSelfService {
       },
     });
 
+    const hasMore = cycles.length > limit;
+    const items = hasMore ? cycles.slice(0, limit) : cycles;
+    const nextCursor = hasMore ? items.at(-1)?.id : undefined;
+
     return {
       success: true,
-      data: cycles.map((c) => ({
+      data: items.map((c) => ({
         id: c.id,
         month: c.month,
         year: c.year,
@@ -182,6 +189,7 @@ export class TenantSelfService {
         status: c.status,
         dueDate: c.dueDate.toISOString(),
       })),
+      meta: { hasMore, nextCursor, limit },
     };
   }
 
@@ -358,13 +366,30 @@ export class TenantSelfService {
     if (agreement.signedByTenantAt) throw new BadRequestException('Already signed');
 
     const bothSigned = !!agreement.signedByOwnerAt;
-    const updated = await this.prisma.rentalAgreement.update({
-      where: { id: agreementId },
-      data: {
-        signedByTenantAt: new Date(),
-        ...(bothSigned && { status: 'SIGNED' }),
-      },
+
+    // TL-001 fix: use a transaction so that when both parties have signed,
+    // the agreement status update and the Tenant.agreementSigned compliance
+    // flag are written atomically. Without this, the compliance dashboard
+    // shows 0% agreement coverage even for fully-signed tenants.
+    const updated = await this.prisma.$transaction(async (tx) => {
+      const result = await tx.rentalAgreement.update({
+        where: { id: agreementId },
+        data: {
+          signedByTenantAt: new Date(),
+          ...(bothSigned && { status: 'SIGNED' }),
+        },
+      });
+
+      if (bothSigned) {
+        await tx.tenant.update({
+          where: { id: tenant.id },
+          data: { agreementSigned: true },
+        });
+      }
+
+      return result;
     });
+
     return { success: true, data: updated };
   }
 
@@ -410,6 +435,9 @@ export class TenantSelfService {
       razorpaySignature: string;
     },
   ) {
+    if (!this.razorpay) throw new BadRequestException('Online payment not configured');
+
+    // Step 1: HMAC signature verification — proves the webhook/callback wasn't tampered
     const keySecret = process.env.RAZORPAY_KEY_SECRET ?? '';
     const expectedSignature = crypto
       .createHmac('sha256', keySecret)
@@ -418,6 +446,19 @@ export class TenantSelfService {
 
     if (expectedSignature !== dto.razorpaySignature) {
       throw new BadRequestException('Payment verification failed — invalid signature');
+    }
+
+    // MA-004: Step 2 — Server-side fetch from Razorpay to confirm the payment is
+    // genuinely captured. HMAC only proves the payload wasn't altered by the client;
+    // it does NOT prove the payment succeeded. A client could replay a valid signature
+    // from a previously failed/refunded payment to unlock rent without actual money.
+    // Fetching from Razorpay's API is the authoritative source of truth.
+    const rzpPayment = await this.razorpay.payments.fetch(dto.razorpayPaymentId);
+    if (rzpPayment.status !== 'captured') {
+      throw new BadRequestException(
+        `Payment not captured — current status: ${rzpPayment.status}. ` +
+        'Payment must be fully captured before it can be recorded.',
+      );
     }
 
     const tenant = await this.prisma.tenant.findUnique({ where: { userId }, select: { id: true, propertyId: true } });
@@ -456,12 +497,13 @@ export class TenantSelfService {
       return p;
     });
 
-    // Invalidate tenant dashboard + operator dashboards after successful payment
+    // Invalidate tenant dashboard + operator dashboards after successful payment.
+    // PF-002 fix: property-scoped operator pattern — only evict keys for THIS property.
     const now = new Date();
     const monthKey = `${now.getFullYear()}-${now.getMonth() + 1}`;
     void this.cache.del(`dashboard:tenant:${userId}:${monthKey}`).catch(() => undefined);
-    void this.cache.delPattern('dashboard:operator:*').catch(() => undefined);
     if (tenant.propertyId) {
+      void this.cache.delPattern(`dashboard:operator:${tenant.propertyId}:*`).catch(() => undefined);
       void this.cache.del(`dashboard:property:${tenant.propertyId}:${monthKey}`).catch(() => undefined);
     }
 

@@ -36,6 +36,7 @@ export class NotificationsListener {
 
   @OnEvent(DOMAIN_EVENTS.TENANT_MOVED_IN)
   async onTenantMovedIn(evt: TenantMovedInEvent) {
+    // ── Welcome notification to the new tenant ────────────────────────────────
     const title = 'Welcome! Move-in confirmed';
     const body = 'Your move-in has been confirmed. Welcome to your new home.';
     await this.notifications.send(evt.tenantUserId, title, body, NotificationType.MOVE_IN_CONFIRMED, {
@@ -44,6 +45,38 @@ export class NotificationsListener {
     });
     const user = await this.getUser(evt.tenantUserId);
     await this.push.send(user?.expoPushToken, title, body);
+
+    // NS-003: Notify existing roommates (other active tenants in the same room)
+    // that a new person has moved in. Helps set expectations in shared rooms.
+    // We resolve the roomId from the bedId and find all other active allocations.
+    const movedInBed = await this.prisma.bed.findUnique({
+      where: { id: evt.bedId },
+      select: { roomId: true },
+    });
+    if (!movedInBed) return;
+
+    const roommateAllocations = await this.prisma.tenantAllocation.findMany({
+      where: {
+        isActive: true,
+        bed: { roomId: movedInBed.roomId },
+        tenantId: { not: evt.tenantId }, // exclude the tenant who just moved in
+      },
+      select: { tenant: { select: { userId: true } } },
+    });
+
+    const rmTitle = 'New roommate moved in';
+    const rmBody = 'A new tenant has moved into your room. Say hello!';
+
+    await Promise.allSettled(
+      roommateAllocations.map(async ({ tenant }) => {
+        await this.notifications.send(tenant.userId, rmTitle, rmBody, NotificationType.SYSTEM, {
+          propertyId: evt.propertyId,
+          roomId: movedInBed.roomId,
+        });
+        const rmUser = await this.getUser(tenant.userId);
+        await this.push.send(rmUser?.expoPushToken, rmTitle, rmBody);
+      }),
+    );
   }
 
   @OnEvent(DOMAIN_EVENTS.TENANT_MOVED_OUT)
@@ -122,13 +155,37 @@ export class NotificationsListener {
 
   @OnEvent(DOMAIN_EVENTS.COMPLAINT_CREATED)
   async onComplaintCreated(evt: ComplaintCreatedEvent) {
+    // ── Notify the complaint raiser (tenant) ──────────────────────────────────
     const title = 'Complaint submitted';
     const body = `Your complaint "${evt.title}" has been submitted and will be reviewed shortly.`;
     await this.notifications.send(evt.raisedBy, title, body, NotificationType.SYSTEM, {
       complaintId: evt.complaintId,
     });
-    const user = await this.getUser(evt.raisedBy);
-    await this.push.send(user?.expoPushToken, title, body);
+    const raiserUser = await this.getUser(evt.raisedBy);
+    await this.push.send(raiserUser?.expoPushToken, title, body);
+
+    // UX-003: Notify all OPERATOR / CO_OPERATOR / STAFF on the property so they
+    // are alerted immediately without having to poll the complaints list.
+    // Fire-and-forget in parallel — a notification failure must not block the handler.
+    const opTitle = 'New complaint raised';
+    const opBody = `"${evt.title}" — action required.`;
+    const opMetadata = { complaintId: evt.complaintId, propertyId: evt.propertyId };
+
+    const propertyStaff = await this.prisma.propertyRole.findMany({
+      where: {
+        propertyId: evt.propertyId,
+        role: { in: ['OPERATOR', 'CO_OPERATOR', 'STAFF'] },
+      },
+      select: { userId: true },
+    });
+
+    await Promise.allSettled(
+      propertyStaff.map(async ({ userId }) => {
+        await this.notifications.send(userId, opTitle, opBody, NotificationType.SYSTEM, opMetadata);
+        const staffUser = await this.getUser(userId);
+        await this.push.send(staffUser?.expoPushToken, opTitle, opBody);
+      }),
+    );
   }
 
   @OnEvent(DOMAIN_EVENTS.COMPLAINT_RESOLVED)

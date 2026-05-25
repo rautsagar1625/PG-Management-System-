@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { ComplaintCategory, ComplaintStatus, Priority } from '@prisma/client';
 
@@ -35,14 +35,29 @@ export class ComplaintsService {
     private eventEmitter: EventEmitter2,
   ) {}
 
-  async findAll(propertyId: string, filters: { status?: string; category?: string }) {
+  async findAll(
+    propertyId: string,
+    filters: {
+      status?: string;
+      category?: string;
+      // CS-001 fix: cursor-based pagination replaces the hardcoded take:500
+      // which would load all complaints into memory and cause OOM on busy properties.
+      cursor?: string;  // ID of the last item from the previous page
+      limit?: number;
+    },
+  ) {
+    // Cap at 100 to protect against gigantic requests; default 50 for fast mobile rendering
+    const limit = Math.min(Math.max(filters.limit ?? 50, 1), 100);
+
     const complaints = await this.prisma.complaint.findMany({
       where: {
         propertyId,
         ...(filters.status && { status: filters.status as ComplaintStatus }),
         ...(filters.category && { category: filters.category as ComplaintCategory }),
       },
-      take: 500,
+      // Fetch one extra to determine if there is a next page
+      take: limit + 1,
+      ...(filters.cursor ? { cursor: { id: filters.cursor }, skip: 1 } : {}),
       include: {
         raisedByUser: { select: { id: true, name: true } },
         assignedToUser: { select: { id: true, name: true } },
@@ -52,7 +67,15 @@ export class ComplaintsService {
       orderBy: [{ priority: 'desc' }, { createdAt: 'desc' }],
     });
 
-    return { success: true, data: complaints };
+    const hasMore = complaints.length > limit;
+    const items = hasMore ? complaints.slice(0, limit) : complaints;
+    const nextCursor = hasMore ? items.at(-1)?.id : undefined;
+
+    return {
+      success: true,
+      data: items,
+      meta: { hasMore, nextCursor, limit },
+    };
   }
 
   async findOne(id: string) {
@@ -109,6 +132,28 @@ export class ComplaintsService {
       if (!allowed.includes(dto.status)) {
         throw new BadRequestException(
           `Cannot transition complaint from ${complaint.status} to ${dto.status}`,
+        );
+      }
+    }
+
+    // CS-004: Validate that the assignee has a role on this property.
+    // Prevents assigning complaints to users from other properties or platform-level
+    // admins who have no operational context for this PG.
+    if (dto.assignedTo && dto.assignedTo !== complaint.assignedTo) {
+      const assigneeRole = await this.prisma.propertyRole.findUnique({
+        where: { propertyId_userId: { propertyId: complaint.propertyId, userId: dto.assignedTo } },
+        select: { role: true },
+      });
+      if (!assigneeRole) {
+        throw new ForbiddenException(
+          'The specified user does not have a role on this property and cannot be assigned to this complaint.',
+        );
+      }
+      // Only OPERATOR, CO_OPERATOR, STAFF roles can be assigned maintenance work
+      const assignableRoles = ['OPERATOR', 'CO_OPERATOR', 'STAFF'] as const;
+      if (!assignableRoles.includes(assigneeRole.role as typeof assignableRoles[number])) {
+        throw new BadRequestException(
+          `User with role ${assigneeRole.role} cannot be assigned complaints. Only OPERATOR, CO_OPERATOR, or STAFF may be assigned.`,
         );
       }
     }

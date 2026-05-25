@@ -4,6 +4,7 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
+import { randomUUID } from 'crypto';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import {
   BedStatus,
@@ -16,6 +17,7 @@ import {
 import {
   IsBoolean,
   IsDateString,
+  IsIn,
   IsNumber,
   IsOptional,
   IsString,
@@ -26,6 +28,7 @@ import { Type } from 'class-transformer';
 
 import { TENANT_STATUS_TRANSITIONS } from '@pg-system/constants';
 
+import { CacheService } from '../../database/cache.service';
 import { PrismaService } from '../../database/prisma.service';
 import { AllocationService } from '../allocation/allocation.service';
 import {
@@ -86,6 +89,25 @@ export class MoveOutDto {
   @Type(() => Number)
   depositForfeitAmount?: number;
 
+  // AE-004 fix: deposit refunds are usually UPI or bank transfer, not cash.
+  // Previously hardcoded to 'CASH', causing reconciliation mismatches.
+  @IsIn(['CASH', 'UPI', 'BANK_TRANSFER', 'CHEQUE', 'CARD'])
+  @IsOptional()
+  depositRefundMethod?: 'CASH' | 'UPI' | 'BANK_TRANSFER' | 'CHEQUE' | 'CARD';
+
+  // TL-005: explicit flag required to move a tenant out before their notice period ends
+  @IsBoolean()
+  @IsOptional()
+  forceEarlyMoveOut?: boolean;
+
+  // TL-004: preview token — pin the financial snapshot shown during preview.
+  // If the balance has changed since the operator reviewed the preview, the
+  // server rejects the submission and asks for a fresh preview.
+  // Optional — omitting it skips the stale-balance check (for programmatic callers).
+  @IsString()
+  @IsOptional()
+  previewToken?: string;
+
   @IsString()
   @IsOptional()
   notes?: string;
@@ -119,6 +141,7 @@ export class TenantWorkflowService {
     private prisma: PrismaService,
     private allocation: AllocationService,
     private eventEmitter: EventEmitter2,
+    private cache: CacheService,
   ) {}
 
   async scheduleVisit(tenantId: string, visitDate: string, notes?: string) {
@@ -213,6 +236,34 @@ export class TenantWorkflowService {
       );
     }
 
+    // AE-001 fix: When a tenant has gone through finalizeRoom, that step sets the
+    // chosen bed to BedStatus.RESERVED. The bedId passed here must match that
+    // RESERVED bed — passing a different bedId would leave a ghost RESERVED bed
+    // whose occupancy counter was incremented in finalizeRoom but never cleaned up,
+    // corrupting room occupancy data permanently.
+    //
+    // A RESERVED bed is the definitive proof of which bed was chosen in finalizeRoom.
+    // Any other bedId (AVAILABLE, OCCUPIED) indicates a mismatch.
+    if (['ROOM_FINALIZED', 'PENDING_COMPLIANCE'].includes(tenant.status as string)) {
+      const targetBed = await this.prisma.bed.findUnique({
+        where: { id: dto.bedId },
+        include: { room: { select: { propertyId: true } } },
+      });
+      if (!targetBed) {
+        throw new NotFoundException(`Bed ${dto.bedId} not found`);
+      }
+      if (targetBed.room.propertyId !== tenant.propertyId) {
+        throw new BadRequestException('Bed does not belong to this property');
+      }
+      if (targetBed.status !== BedStatus.RESERVED) {
+        throw new ConflictException(
+          `Bed must be in RESERVED status for move-in (current: ${targetBed.status}). ` +
+          'Use POST /tenants/:id/finalize-room to reserve a bed first, or pass the ' +
+          'exact bedId that was reserved in that step.',
+        );
+      }
+    }
+
     const result = await this.prisma.$transaction(async (tx) => {
       await this.allocation.createInitialAllocation(tx, {
         tenantId,
@@ -275,11 +326,72 @@ export class TenantWorkflowService {
     const tenant = await this.getTenant(tenantId);
     this.assertValidTransition(tenant.status, TenantStatus.ARCHIVED);
 
+    const now = new Date();
+
+    // SP4-6: DPDP-lite — anonymise PII atomically with the status change.
+    // All steps run in a single transaction so we never leave the record
+    // in a half-anonymised state if a later step fails.
+    //
+    // What is redacted:
+    //   • User.name / User.phone / User.whatsappPhone  (linked User account)
+    //   • TenantDocument.documentNumber + fileUrl      (Aadhaar / PAN numbers)
+    //   • EmergencyContact.name / .phone / .relation   (third-party PII)
+    //
+    // What is NOT redacted:
+    //   • User.email  — kept for auth record / support tracing
+    //   • Financial records (RentCycle, Payment) — required for accounting
+    //   • Audit log — immutable by design
+    await this.prisma.$transaction(async (tx) => {
+      await tx.tenant.update({
+        where: { id: tenantId },
+        data: {
+          status: TenantStatus.ARCHIVED,
+          archivedAt: now,
+          anonymisedAt: now,
+        },
+      });
+
+      // Redact KYC document identifiers and file URLs
+      await tx.tenantDocument.updateMany({
+        where: { tenantId },
+        data: { documentNumber: 'REDACTED', fileUrl: null },
+      });
+
+      // Redact third-party PII from emergency contacts
+      await tx.emergencyContact.updateMany({
+        where: { tenantId },
+        data: { name: 'REDACTED', phone: '0000000000', relation: 'REDACTED' },
+      });
+
+      // Redact the linked User's direct identifiers.
+      // User.tenantProfile is 1:1 (userId is @unique on Tenant), so this
+      // user can only belong to this one tenant — safe to redact.
+      await tx.user.update({
+        where: { id: tenant.user.id },
+        data: {
+          name: `Archived-${tenant.tenantCode}`,
+          phone: null,
+          whatsappPhone: null,
+        },
+      });
+    });
+
+    return { tenantId, archivedAt: now, anonymisedAt: now };
+  }
+
+  // TL-003 fix: A rejected lead can now be re-engaged when circumstances change
+  // (e.g. rooms become available, pricing is negotiated). Without this, operators
+  // were creating duplicate tenant records for the same person, destroying history
+  // and artificially deflating lead-to-conversion analytics.
+  async reEngage(tenantId: string, notes?: string) {
+    const tenant = await this.getTenant(tenantId);
+    this.assertValidTransition(tenant.status, TenantStatus.LEAD);
+
     return this.prisma.tenant.update({
       where: { id: tenantId },
       data: {
-        status: TenantStatus.ARCHIVED,
-        archivedAt: new Date(),
+        status: TenantStatus.LEAD,
+        notes: notes ?? tenant.notes,
       },
     });
   }
@@ -309,6 +421,57 @@ export class TenantWorkflowService {
       throw new BadRequestException(
         `Cannot move out from status ${tenant.status}`,
       );
+    }
+
+    // TL-004: Stale preview guard — if the operator provided a preview token,
+    // verify that the financial snapshot has not changed since the preview was generated.
+    // This prevents an operator from confirming a ₹2,000 refund, then a payment arriving,
+    // and the system processing the refund based on stale data.
+    if (dto.previewToken) {
+      const snapshotJson = await this.cache.get<string>(`moveout-preview:${tenantId}:${dto.previewToken}`);
+      if (!snapshotJson) {
+        throw new ConflictException(
+          'Move-out preview has expired or is invalid. Please refresh the preview and resubmit.',
+        );
+      }
+      const snapshot = JSON.parse(snapshotJson) as { depositBalance: number; totalPendingRent: number };
+      const currentDeposit = Number(tenant.depositBalance);
+      const currentPending = await this.prisma.rentCycle.aggregate({
+        where: { tenantId, status: { in: ['PENDING', 'OVERDUE', 'PARTIAL'] } },
+        _sum: { remainingAmount: true },
+      });
+      const currentPendingRent = Number(currentPending._sum.remainingAmount ?? 0);
+
+      if (
+        Math.abs(currentDeposit - snapshot.depositBalance) > 0.01 ||
+        Math.abs(currentPendingRent - snapshot.totalPendingRent) > 0.01
+      ) {
+        // Invalidate the stale token immediately
+        void this.cache.del(`moveout-preview:${tenantId}:${dto.previewToken}`).catch(() => undefined);
+        throw new ConflictException(
+          'Financial balances changed since the move-out preview was generated. ' +
+          'A payment may have arrived. Please refresh the preview and resubmit.',
+        );
+      }
+      // Token used — delete it so it cannot be replayed
+      void this.cache.del(`moveout-preview:${tenantId}:${dto.previewToken}`).catch(() => undefined);
+    }
+
+    // TL-005 fix: If the tenant served notice, enforce a minimum 14-day notice period.
+    // An operator trying to move out a tenant immediately after notice must explicitly
+    // pass forceEarlyMoveOut: true — this is logged in the audit trail.
+    if (tenant.noticeDate && !dto.forceEarlyMoveOut) {
+      const minimumNoticeEnd = new Date(tenant.noticeDate);
+      minimumNoticeEnd.setDate(minimumNoticeEnd.getDate() + 14);
+      const requestedMoveOut = new Date(dto.moveOutDate);
+      if (requestedMoveOut < minimumNoticeEnd) {
+        throw new BadRequestException(
+          `Move-out date ${dto.moveOutDate} is within the minimum 14-day notice period. ` +
+          `Notice served: ${tenant.noticeDate.toISOString().slice(0, 10)}, ` +
+          `earliest allowed: ${minimumNoticeEnd.toISOString().slice(0, 10)}. ` +
+          'Set forceEarlyMoveOut: true to override (use only with OWNER approval).',
+        );
+      }
     }
 
     // Pending dues query and move-out write are in the same transaction
@@ -341,7 +504,9 @@ export class TenantWorkflowService {
         depositStatus = tenant.depositStatus;
       }
 
-      // Record the deposit refund as a payment for audit trail
+      // Record the deposit refund as a payment for audit trail.
+      // AE-004 fix: use caller-supplied method (default CASH) so bank statement
+      // reconciliation can match records to actual UPI/bank transfer refunds.
       if (refundAmount > 0) {
         await tx.payment.create({
           data: {
@@ -349,7 +514,7 @@ export class TenantWorkflowService {
             propertyId: tenant.propertyId,
             amount: new Prisma.Decimal(refundAmount),
             type: 'DEPOSIT_REFUND',
-            method: 'CASH',
+            method: dto.depositRefundMethod ?? 'CASH',
             notes: dto.notes ?? undefined,
             recordedBy,
             paidAt: new Date(dto.moveOutDate),
@@ -496,18 +661,27 @@ export class TenantWorkflowService {
       }),
     ]);
 
+    const depositBalance = Number(tenant.depositBalance);
+    const totalPendingRent = Number(pending._sum.remainingAmount ?? 0);
+
+    // TL-004: Generate a short-lived preview token that pins the financial snapshot.
+    // moveOut will validate current balances match this snapshot before proceeding.
+    // TTL: 30 minutes — enough time for operator to review and confirm.
+    const previewToken = randomUUID();
+    const snapshot = { depositBalance, totalPendingRent, generatedAt: Date.now() };
+    void this.cache
+      .set(`moveout-preview:${tenantId}:${previewToken}`, JSON.stringify(snapshot), 1800)
+      .catch(() => undefined); // best-effort; missing cache = operator must re-fetch
+
     return {
       success: true,
       data: {
         tenantId,
         tenantStatus: tenant.status,
-        depositBalance: Number(tenant.depositBalance),
+        depositBalance,
         pendingRentCycles: outstandingCycles.length,
-        totalPendingRent: Number(pending._sum.remainingAmount ?? 0),
-        netDepositAfterDues: Math.max(
-          0,
-          Number(tenant.depositBalance) - Number(pending._sum.remainingAmount ?? 0),
-        ),
+        totalPendingRent,
+        netDepositAfterDues: Math.max(0, depositBalance - totalPendingRent),
         activeAllocation: activeAlloc
           ? {
               bedId: activeAlloc.bedId,
@@ -518,6 +692,9 @@ export class TenantWorkflowService {
             }
           : null,
         outstandingCycles,
+        // Surface token so the UI can pass it back with the moveOut submission
+        previewToken,
+        previewExpiresInSeconds: 1800,
       },
     };
   }

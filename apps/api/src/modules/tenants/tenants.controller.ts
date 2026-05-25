@@ -59,6 +59,18 @@ export class TenantsController {
     return this.tenantsService.findOne(id, ctx);
   }
 
+  @Get(':id/onboarding-status')
+  @ApiOperation({ summary: 'Get tenant onboarding progress — steps completed, pending actions, next action' })
+  @ApiResponse({
+    status: 200,
+    description: 'Structured onboarding progress: currentStep, completedSteps, pendingActions, nextAction, compliance flags',
+  })
+  @ApiReadResponses()
+  @PropertyRoles('OWNER', 'OPERATOR', 'CO_OPERATOR', 'STAFF')
+  getOnboardingStatus(@Param('id') id: string, @CurrentUser() ctx: RequestContext) {
+    return this.tenantsService.getOnboardingStatus(id, ctx);
+  }
+
   // ── Workflow transitions ───────────────────────────
 
   @Put(':id/schedule-visit')
@@ -166,12 +178,33 @@ export class TenantsController {
   }
 
   @Put(':id/archive')
-  @ApiOperation({ summary: 'Archive a moved-out tenant record' })
+  @ApiOperation({
+    summary: 'Archive a moved-out tenant and anonymise PII (DPDP-lite)',
+    description:
+      'Transitions tenant to ARCHIVED status and immediately redacts personal data: ' +
+      'User name/phone, KYC document numbers and file URLs, and emergency contact details. ' +
+      'Financial records (rent cycles, payments) are retained for accounting. ' +
+      'Returns { tenantId, archivedAt, anonymisedAt }.',
+  })
   @ApiResponse({ status: 200, description: 'Tenant record archived' })
   @ApiAuthResponses()
   @ApiNotFoundResponse()
   @PropertyRoles('OWNER', 'OPERATOR')
   archive(@Param('id') id: string) {
     return this.workflowService.archive(id);
+  }
+
+  @Put(':id/re-engage')
+  @ApiOperation({ summary: 'Re-engage a rejected lead (REJECTED → LEAD)' })
+  @ApiResponse({ status: 200, description: 'Tenant re-engaged as a fresh lead when rooms become available' })
+  @ApiAuthResponses()
+  @ApiNotFoundResponse()
+  @ApiBadRequestResponse()
+  @PropertyRoles('OWNER', 'OPERATOR', 'CO_OPERATOR')
+  reEngage(
+    @Param('id') id: string,
+    @Body() body: { notes?: string },
+  ) {
+    return this.workflowService.reEngage(id, body.notes);
   }
 }

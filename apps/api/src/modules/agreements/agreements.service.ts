@@ -87,12 +87,26 @@ export class AgreementsService {
     const now = new Date();
     const bothSigned = agreement.signedByOwnerAt !== null;
 
-    const updated = await this.prisma.rentalAgreement.update({
-      where: { id },
-      data: {
-        signedByTenantAt: now,
-        ...(bothSigned && { status: AgreementStatus.SIGNED }),
-      },
+    // TL-001 fix: Use a transaction so that the agreement status update and the
+    // compliance flag on the tenant are atomic. Previously agreementSigned was
+    // never set, making compliance dashboards show 0% even for fully-signed tenants.
+    const updated = await this.prisma.$transaction(async (tx) => {
+      const result = await tx.rentalAgreement.update({
+        where: { id },
+        data: {
+          signedByTenantAt: now,
+          ...(bothSigned && { status: AgreementStatus.SIGNED }),
+        },
+      });
+
+      if (bothSigned) {
+        await tx.tenant.update({
+          where: { id: agreement.tenantId },
+          data: { agreementSigned: true },
+        });
+      }
+
+      return result;
     });
 
     return { success: true, data: updated };
@@ -111,12 +125,24 @@ export class AgreementsService {
     const now = new Date();
     const bothSigned = agreement.signedByTenantAt !== null;
 
-    const updated = await this.prisma.rentalAgreement.update({
-      where: { id },
-      data: {
-        signedByOwnerAt: now,
-        ...(bothSigned && { status: AgreementStatus.SIGNED }),
-      },
+    // TL-001 fix: atomic agreement sign + compliance flag update (same as signByTenant)
+    const updated = await this.prisma.$transaction(async (tx) => {
+      const result = await tx.rentalAgreement.update({
+        where: { id },
+        data: {
+          signedByOwnerAt: now,
+          ...(bothSigned && { status: AgreementStatus.SIGNED }),
+        },
+      });
+
+      if (bothSigned) {
+        await tx.tenant.update({
+          where: { id: agreement.tenantId },
+          data: { agreementSigned: true },
+        });
+      }
+
+      return result;
     });
 
     return { success: true, data: updated };
