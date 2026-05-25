@@ -14,10 +14,21 @@ import {
   Plus,
   Wrench,
   Loader2,
+  UserPlus,
+  Trash2,
+  Search,
+  ShieldCheck,
 } from 'lucide-react';
+import { toast } from 'sonner';
 import {
   getProperty,
   getOperatorDashboard,
+  getPropertyRoles,
+  addPropertyRole,
+  removePropertyRole,
+  lookupUserByEmail,
+  type PropertyRole,
+  type PropertyRoleType,
 } from '@/lib/properties-api';
 import { getPropertyPerformance } from '@/lib/dashboard-api';
 import { getRooms, createRoom, type CreateRoomDto, ROOM_TYPE_LABELS } from '@/lib/rooms-api';
@@ -34,7 +45,7 @@ import { formatCurrency, formatDate } from '@/lib/utils';
 import type { Tenant } from '@/lib/tenants-api';
 import type { Room } from '@/lib/rooms-api';
 
-type Tab = 'overview' | 'rooms' | 'tenants' | 'financials' | 'performance';
+type Tab = 'overview' | 'rooms' | 'tenants' | 'financials' | 'performance' | 'team';
 
 const TABS: { id: Tab; label: string }[] = [
   { id: 'overview', label: 'Overview' },
@@ -42,6 +53,7 @@ const TABS: { id: Tab; label: string }[] = [
   { id: 'tenants', label: 'Tenants' },
   { id: 'financials', label: 'Financials' },
   { id: 'performance', label: 'Performance' },
+  { id: 'team', label: 'Team' },
 ];
 
 const ROOM_TYPES = [
@@ -166,6 +178,7 @@ export default function PropertyDetailPage() {
           )}
           {activeTab === 'financials' && <FinancialsTab propertyId={id} stats={stats} />}
           {activeTab === 'performance' && <PerformanceTab propertyId={id} />}
+          {activeTab === 'team' && <TeamTab propertyId={id} />}
         </div>
       </div>
     </div>
@@ -712,6 +725,237 @@ function PerformanceTab({ propertyId }: { propertyId: string }) {
               </div>
             ))}
           </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Team Tab ──────────────────────────────────────────────────────────────────
+
+const ROLE_OPTIONS: { value: PropertyRoleType; label: string; description: string }[] = [
+  { value: 'OWNER', label: 'Owner', description: 'Full access, receives settlements' },
+  { value: 'OPERATOR', label: 'Operator', description: 'Manages day-to-day operations' },
+  { value: 'CO_OPERATOR', label: 'Co-Operator', description: 'Partner in operations' },
+  { value: 'STAFF', label: 'Staff', description: 'Support / maintenance' },
+];
+
+const ROLE_STYLES: Record<PropertyRoleType, string> = {
+  OWNER: 'bg-purple-50 text-purple-700',
+  OPERATOR: 'bg-blue-50 text-blue-700',
+  CO_OPERATOR: 'bg-indigo-50 text-indigo-700',
+  STAFF: 'bg-gray-100 text-gray-600',
+};
+
+function TeamTab({ propertyId }: { propertyId: string }) {
+  const qc = useQueryClient();
+  const [showAdd, setShowAdd] = useState(false);
+  const [emailSearch, setEmailSearch] = useState('');
+  const [foundUser, setFoundUser] = useState<{ id: string; name: string; email: string } | null>(null);
+  const [lookupError, setLookupError] = useState('');
+  const [isLooking, setIsLooking] = useState(false);
+  const [selectedRole, setSelectedRole] = useState<PropertyRoleType>('OPERATOR');
+  const [removeConfirmId, setRemoveConfirmId] = useState<string | null>(null);
+
+  const { data: roles = [], isLoading } = useQuery({
+    queryKey: ['property-roles', propertyId],
+    queryFn: () => getPropertyRoles(propertyId),
+  });
+
+  const addMut = useMutation({
+    mutationFn: () => addPropertyRole(propertyId, { userId: foundUser!.id, role: selectedRole }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['property-roles', propertyId] });
+      qc.invalidateQueries({ queryKey: ['property', propertyId] });
+      setShowAdd(false);
+      setEmailSearch('');
+      setFoundUser(null);
+      toast.success('Team member added');
+    },
+    onError: () => toast.error('Failed to add team member'),
+  });
+
+  const removeMut = useMutation({
+    mutationFn: (roleId: string) => removePropertyRole(propertyId, roleId),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['property-roles', propertyId] });
+      qc.invalidateQueries({ queryKey: ['property', propertyId] });
+      setRemoveConfirmId(null);
+      toast.success('Team member removed');
+    },
+    onError: () => toast.error('Failed to remove team member'),
+  });
+
+  const handleLookup = async () => {
+    if (!emailSearch.trim()) { setLookupError('Enter an email address'); return; }
+    setIsLooking(true);
+    setLookupError('');
+    setFoundUser(null);
+    try {
+      const user = await lookupUserByEmail(propertyId, emailSearch.trim());
+      setFoundUser(user);
+    } catch {
+      setLookupError('No user found with that email. They must register first.');
+    } finally {
+      setIsLooking(false);
+    }
+  };
+
+  if (isLoading) return <PageLoader />;
+
+  return (
+    <div className="space-y-4">
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <div>
+          <h3 className="text-sm font-semibold text-gray-800">Property Team</h3>
+          <p className="text-xs text-gray-400 mt-0.5">{roles.length} member{roles.length !== 1 ? 's' : ''}</p>
+        </div>
+        {!showAdd && (
+          <button
+            onClick={() => setShowAdd(true)}
+            className="flex items-center gap-1.5 text-sm bg-blue-600 text-white px-3 py-1.5 rounded-lg hover:bg-blue-700 transition-colors"
+          >
+            <UserPlus className="w-3.5 h-3.5" />
+            Add Member
+          </button>
+        )}
+      </div>
+
+      {/* Add Member Panel */}
+      {showAdd && (
+        <div className="border border-gray-200 rounded-xl p-4 bg-gray-50 space-y-4">
+          <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Add Team Member</p>
+
+          {/* Email lookup */}
+          <div>
+            <label className="block text-xs font-medium text-gray-600 mb-1">Find by Email</label>
+            <div className="flex gap-2">
+              <input
+                type="email"
+                value={emailSearch}
+                onChange={(e) => { setEmailSearch(e.target.value); setLookupError(''); setFoundUser(null); }}
+                onKeyDown={(e) => e.key === 'Enter' && handleLookup()}
+                placeholder="user@email.com"
+                className="flex-1 border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+              <button
+                onClick={handleLookup}
+                disabled={isLooking}
+                className="px-3 py-2 bg-gray-200 hover:bg-gray-300 rounded-lg transition-colors disabled:opacity-50"
+              >
+                {isLooking ? <Loader2 className="w-4 h-4 animate-spin" /> : <Search className="w-4 h-4" />}
+              </button>
+            </div>
+            {lookupError && <p className="text-xs text-red-500 mt-1">{lookupError}</p>}
+          </div>
+
+          {/* Found user */}
+          {foundUser && (
+            <div className="bg-white rounded-lg border border-green-200 p-3 flex items-center gap-3">
+              <div className="w-8 h-8 rounded-full bg-green-100 flex items-center justify-center text-green-700 font-bold text-sm">
+                {foundUser.name[0]?.toUpperCase()}
+              </div>
+              <div className="flex-1">
+                <p className="text-sm font-semibold text-gray-800">{foundUser.name}</p>
+                <p className="text-xs text-gray-400">{foundUser.email}</p>
+              </div>
+              <ShieldCheck className="w-4 h-4 text-green-500" />
+            </div>
+          )}
+
+          {/* Role selector */}
+          <div>
+            <label className="block text-xs font-medium text-gray-600 mb-2">Assign Role</label>
+            <div className="grid grid-cols-2 gap-2">
+              {ROLE_OPTIONS.map((opt) => (
+                <button
+                  key={opt.value}
+                  onClick={() => setSelectedRole(opt.value)}
+                  className={`text-left p-2.5 rounded-lg border text-xs transition-colors ${
+                    selectedRole === opt.value
+                      ? 'border-blue-400 bg-blue-50'
+                      : 'border-gray-200 bg-white hover:bg-gray-50'
+                  }`}
+                >
+                  <p className="font-semibold text-gray-800">{opt.label}</p>
+                  <p className="text-gray-400 mt-0.5">{opt.description}</p>
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="flex gap-2">
+            <button
+              onClick={() => { setShowAdd(false); setEmailSearch(''); setFoundUser(null); setLookupError(''); }}
+              className="flex-1 text-sm py-2 border border-gray-200 rounded-lg text-gray-600 hover:bg-gray-50 transition-colors"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={() => addMut.mutate()}
+              disabled={!foundUser || addMut.isPending}
+              className="flex-1 text-sm py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors"
+            >
+              {addMut.isPending ? 'Adding…' : 'Add to Team'}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Team List */}
+      {roles.length === 0 ? (
+        <EmptyState
+          icon={Users}
+          title="No team members"
+          description="Add operators, staff, or owners to manage this property."
+        />
+      ) : (
+        <div className="divide-y divide-gray-100 border border-gray-100 rounded-xl overflow-hidden">
+          {roles.map((role: PropertyRole) => (
+            <div key={role.id} className="flex items-center justify-between px-4 py-3 hover:bg-gray-50 transition-colors">
+              <div className="flex items-center gap-3">
+                <div className="w-9 h-9 rounded-full bg-gray-100 flex items-center justify-center text-sm font-bold text-gray-600">
+                  {role.user.name[0]?.toUpperCase()}
+                </div>
+                <div>
+                  <p className="text-sm font-medium text-gray-900">{role.user.name}</p>
+                  <p className="text-xs text-gray-400">{role.user.email}</p>
+                </div>
+              </div>
+              <div className="flex items-center gap-3">
+                <span className={`text-xs px-2.5 py-0.5 rounded-full font-medium ${ROLE_STYLES[role.role]}`}>
+                  {role.role.replace('_', ' ')}
+                </span>
+                {removeConfirmId === role.id ? (
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-xs text-gray-500">Remove?</span>
+                    <button
+                      onClick={() => removeMut.mutate(role.id)}
+                      disabled={removeMut.isPending}
+                      className="text-xs text-red-600 hover:text-red-800 font-medium disabled:opacity-50"
+                    >
+                      Yes
+                    </button>
+                    <button
+                      onClick={() => setRemoveConfirmId(null)}
+                      className="text-xs text-gray-400 hover:text-gray-600"
+                    >
+                      No
+                    </button>
+                  </div>
+                ) : (
+                  <button
+                    onClick={() => setRemoveConfirmId(role.id)}
+                    className="p-1 text-gray-300 hover:text-red-500 transition-colors"
+                    title="Remove from property"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </button>
+                )}
+              </div>
+            </div>
+          ))}
         </div>
       )}
     </div>

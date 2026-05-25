@@ -12,9 +12,10 @@ import {
 } from 'date-fns';
 
 export function getRentDueDate(month: number, year: number, dueDayOfMonth: number = 1): Date {
-  const date = new Date(year, month - 1, dueDayOfMonth);
-  const maxDay = getDaysInMonth(date);
-  return new Date(year, month - 1, Math.min(dueDayOfMonth, maxDay));
+  // Use day=1 to avoid JS Date overflow (e.g. Feb 31 → March 3)
+  const maxDay = getDaysInMonth(new Date(year, month - 1, 1));
+  const day = Math.min(dueDayOfMonth, maxDay);
+  return new Date(year, month - 1, day);
 }
 
 export function getNextRentMonth(month: number, year: number): { month: number; year: number } {

@@ -59,6 +59,36 @@ export interface CreateRoomDto {
   amenities?: string[];
 }
 
+export interface UpdateRoomDto {
+  number?: string;
+  floor?: number;
+  type?: RoomType;
+  baseRent?: number;
+  amenities?: string[];
+  status?: RoomStatus;
+}
+
+export interface UpdateBedDto {
+  label?: string;
+  status?: BedStatus;
+}
+
+export interface AllocationHistoryItem {
+  id: string;
+  tenantId: string;
+  bedId: string;
+  startDate: string;
+  endDate: string | null;
+  isActive: boolean;
+  monthlyRent: number;
+  bed: { label: string };
+  tenant: {
+    id: string;
+    tenantCode: string;
+    user: { name: string; phone: string };
+  };
+}
+
 export interface RoomStats {
   totalRooms: number;
   totalBeds: number;
@@ -93,6 +123,25 @@ export async function getRooms(propertyId: string): Promise<Room[]> {
   return data.data;
 }
 
+// ── Queries ─────────────────────────────────────────────────────────
+
+export async function getRoom(propertyId: string, roomId: string): Promise<Room> {
+  const { data } = await apiClient.get<{ success: boolean; data: Room }>(
+    `/properties/${propertyId}/rooms/${roomId}`,
+  );
+  return data.data;
+}
+
+export async function getRoomAllocations(
+  propertyId: string,
+  roomId: string,
+): Promise<AllocationHistoryItem[]> {
+  const { data } = await apiClient.get<{ success: boolean; data: AllocationHistoryItem[] }>(
+    `/properties/${propertyId}/rooms/${roomId}/allocations`,
+  );
+  return data.data;
+}
+
 // ── Mutations ────────────────────────────────────────────────────────
 
 export async function createRoom(dto: CreateRoomDto): Promise<Room> {
@@ -100,5 +149,22 @@ export async function createRoom(dto: CreateRoomDto): Promise<Room> {
     `/properties/${dto.propertyId}/rooms`,
     dto,
   );
+  return data.data;
+}
+
+export async function updateRoom(
+  propertyId: string,
+  roomId: string,
+  dto: UpdateRoomDto,
+): Promise<Room> {
+  const { data } = await apiClient.patch<{ success: boolean; data: Room }>(
+    `/properties/${propertyId}/rooms/${roomId}`,
+    dto,
+  );
+  return data.data;
+}
+
+export async function updateBed(bedId: string, dto: UpdateBedDto): Promise<Bed> {
+  const { data } = await apiClient.patch<{ success: boolean; data: Bed }>(`/beds/${bedId}`, dto);
   return data.data;
 }

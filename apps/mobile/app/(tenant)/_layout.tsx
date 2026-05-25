@@ -121,8 +121,28 @@ export default function TenantLayout() {
           ),
         }}
       />
-      {/* Hidden screen — navigable via router.push from Home bell icon */}
+      {/* Hidden screens — navigable via router.push but not shown in tab bar */}
       <Tabs.Screen name="notifications" options={{ href: null, title: 'Notifications' }} />
+      <Tabs.Screen
+        name="kyc"
+        options={{
+          href: null,
+          title: 'KYC Documents',
+          headerStyle: { backgroundColor: '#4f46e5' },
+          headerTintColor: '#fff',
+          headerTitleStyle: { fontWeight: '700', fontSize: 17 },
+        }}
+      />
+      <Tabs.Screen
+        name="agreements"
+        options={{
+          href: null,
+          title: 'My Agreements',
+          headerStyle: { backgroundColor: '#4f46e5' },
+          headerTintColor: '#fff',
+          headerTitleStyle: { fontWeight: '700', fontSize: 17 },
+        }}
+      />
     </Tabs>
   );
 }

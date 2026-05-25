@@ -233,3 +233,26 @@ export async function updateOperatorComplaint(
   );
   return res.data;
 }
+
+// ── Tenant creation ───────────────────────────────────────────────────────────
+
+export interface CreateTenantDto {
+  name: string;
+  email: string;
+  phone: string;
+  propertyId: string;
+  depositAmount: number;
+  leadSource?: string;
+}
+
+export interface CreatedTenant {
+  id: string;
+  tenantCode: string;
+  status: string;
+  user: { name: string; email: string; phone: string | null };
+}
+
+export async function createTenant(dto: CreateTenantDto): Promise<CreatedTenant> {
+  const res = await api.post<{ success: boolean; data: CreatedTenant }>('/tenants', dto);
+  return res.data;
+}

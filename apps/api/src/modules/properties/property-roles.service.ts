@@ -41,6 +41,35 @@ export class PropertyRolesService {
     });
   }
 
+  async listRoles(propertyId: string, ctx: RequestContext) {
+    // Verify caller has access to the property
+    if (ctx.systemRole !== 'SUPER_ADMIN') {
+      const access = await this.prisma.propertyRole.findFirst({
+        where: { propertyId, userId: ctx.userId },
+      });
+      if (!access) throw new ForbiddenException('Access denied to this property');
+    }
+
+    const roles = await this.prisma.propertyRole.findMany({
+      where: { propertyId },
+      include: {
+        user: { select: { id: true, name: true, email: true, phone: true } },
+      },
+      orderBy: { createdAt: 'asc' },
+    });
+
+    return { success: true, data: roles };
+  }
+
+  async findUserByEmail(email: string) {
+    const user = await this.prisma.user.findUnique({
+      where: { email },
+      select: { id: true, name: true, email: true, phone: true },
+    });
+    if (!user) throw new NotFoundException('No user found with that email address');
+    return { success: true, data: user };
+  }
+
   async removeRole(propertyId: string, roleId: string, ctx: RequestContext) {
     await this.assertOwnerAccess(propertyId, ctx);
 

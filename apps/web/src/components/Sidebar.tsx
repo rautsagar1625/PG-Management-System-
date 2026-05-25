@@ -19,6 +19,7 @@ import {
   CalendarCheck,
   TrendingUp,
   CreditCard,
+  Settings,
 } from 'lucide-react';
 import { cn, getInitials } from '@/lib/utils';
 import { useAuth } from '@/providers/AuthProvider';
@@ -61,6 +62,12 @@ const NAV_GROUPS = [
     label: 'Insights',
     items: [
       { href: '/dashboard/analytics', label: 'Analytics', icon: TrendingUp, exact: false },
+    ],
+  },
+  {
+    label: 'Account',
+    items: [
+      { href: '/dashboard/settings', label: 'Settings', icon: Settings, exact: false },
     ],
   },
 ];

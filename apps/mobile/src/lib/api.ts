@@ -1,6 +1,6 @@
 import * as SecureStore from 'expo-secure-store';
 
-const API_BASE_URL =
+export const API_BASE_URL =
   process.env.EXPO_PUBLIC_API_URL ??
   (__DEV__ ? 'http://localhost:3001/api/v1' : 'https://api.pgmanager.app/api/v1');
 

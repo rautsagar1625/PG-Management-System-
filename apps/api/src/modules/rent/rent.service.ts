@@ -3,40 +3,53 @@ import { EventEmitter2 } from '@nestjs/event-emitter';
 import { PaymentType, Prisma, RentCycleStatus } from '@prisma/client';
 import { IsDateString, IsIn, IsNumber, IsOptional, IsPositive, IsString, IsUUID } from 'class-validator';
 import { Type } from 'class-transformer';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
 import { RENT_GRACE_PERIOD_DAYS } from '@pg-system/constants';
 import { generateReceiptNumber, getRentDueDate, isRentOverdue } from '@pg-system/utils';
 
+import { CacheService } from '../../database/cache.service';
 import { PrismaService } from '../../database/prisma.service';
 import { DOMAIN_EVENTS, PaymentRecordedEvent } from '../../events/domain-events';
 
 export class RecordPaymentDto {
+  @ApiProperty({ example: 'uuid-of-tenant' })
   @IsUUID()
   tenantId: string;
 
+  @ApiPropertyOptional({ example: 'uuid-of-rent-cycle', description: 'Required for RENT type payments' })
   @IsUUID()
   @IsOptional()
   rentCycleId?: string;
 
+  @ApiProperty({ example: 8000, description: 'Payment amount in INR' })
   @IsNumber()
   @IsPositive()
   @Type(() => Number)
   amount: number;
 
+  @ApiProperty({
+    enum: ['RENT', 'DEPOSIT', 'DEPOSIT_REFUND', 'DEPOSIT_ADJUSTMENT', 'RENT_REFUND', 'ADJUSTMENT', 'WAIVER', 'FINE', 'MISCELLANEOUS'],
+    example: 'RENT',
+  })
   @IsIn(['RENT', 'DEPOSIT', 'DEPOSIT_REFUND', 'DEPOSIT_ADJUSTMENT', 'RENT_REFUND', 'ADJUSTMENT', 'WAIVER', 'FINE', 'MISCELLANEOUS'])
   type: 'RENT' | 'DEPOSIT' | 'DEPOSIT_REFUND' | 'DEPOSIT_ADJUSTMENT' | 'RENT_REFUND' | 'ADJUSTMENT' | 'WAIVER' | 'FINE' | 'MISCELLANEOUS';
 
+  @ApiProperty({ enum: ['CASH', 'UPI', 'BANK_TRANSFER', 'CHEQUE', 'CARD', 'ONLINE'], example: 'UPI' })
   @IsIn(['CASH', 'UPI', 'BANK_TRANSFER', 'CHEQUE', 'CARD', 'ONLINE'])
   method: 'CASH' | 'UPI' | 'BANK_TRANSFER' | 'CHEQUE' | 'CARD' | 'ONLINE';
 
+  @ApiPropertyOptional({ example: 'UPI-REF-20240501' })
   @IsString()
   @IsOptional()
   referenceNo?: string;
 
+  @ApiPropertyOptional({ example: 'May rent payment' })
   @IsString()
   @IsOptional()
   notes?: string;
 
+  @ApiProperty({ example: '2024-05-01T00:00:00.000Z', description: 'ISO 8601 date-time when payment was made' })
   @IsDateString()
   paidAt: string;
 }
@@ -46,6 +59,7 @@ export class RentService {
   constructor(
     private prisma: PrismaService,
     private eventEmitter: EventEmitter2,
+    private cache: CacheService,
   ) {}
 
   /**
@@ -254,6 +268,13 @@ export class RentService {
       type: dto.type,
       receiptNo: result.receiptNo,
     } satisfies PaymentRecordedEvent);
+
+    // Invalidate dashboard caches that depend on this property's rent data.
+    // Fire-and-forget — cache invalidation is best-effort; don't block the response.
+    void this.cache.delPattern('dashboard:operator:*').catch(() => undefined);
+    void this.cache.del(
+      `dashboard:property:${result.propertyId}:${new Date().getFullYear()}-${new Date().getMonth() + 1}`,
+    ).catch(() => undefined);
 
     return { payment: result.payment, receiptNo: result.receiptNo };
   }

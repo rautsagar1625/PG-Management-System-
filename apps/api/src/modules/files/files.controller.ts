@@ -12,7 +12,7 @@ import { FileEntityType } from '@prisma/client';
 
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import type { RequestContext } from '@pg-system/types';
-import { ConfirmUploadDto, CreateUploadUrlDto } from './dto/files.dto';
+import { ConfirmUploadDto, CreateUploadUrlDto, UploadBase64Dto } from './dto/files.dto';
 import { FilesService } from './files.service';
 
 @ApiTags('Files')
@@ -54,6 +54,17 @@ export class FilesController {
   @ApiOperation({ summary: 'List all files for an entity (tenant, complaint, etc.)' })
   listForEntity(@Param('type') type: FileEntityType, @Param('id') id: string) {
     return this.filesService.listForEntity(type, id);
+  }
+
+  /**
+   * Mobile-friendly upload endpoint: accepts base64-encoded file content and
+   * uploads it directly to S3 from the server. Eliminates the need for the
+   * client to do a 3-step (request URL → PUT to S3 → confirm) flow.
+   */
+  @Post('upload-base64')
+  @ApiOperation({ summary: 'Upload a base64-encoded file (mobile clients)' })
+  uploadBase64(@Body() dto: UploadBase64Dto, @CurrentUser() user: RequestContext) {
+    return this.filesService.uploadBase64(dto, user.userId);
   }
 
   /** Soft-delete a file (keeps S3 object for recovery, marks as DELETED in DB). */

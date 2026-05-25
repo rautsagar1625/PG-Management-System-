@@ -13,6 +13,15 @@ export interface CreateRoomDto {
   amenities?: string[];
 }
 
+export interface UpdateRoomDto {
+  number?: string;
+  floor?: number;
+  type?: RoomType;
+  baseRent?: number;
+  amenities?: string[];
+  status?: RoomStatus;
+}
+
 @Injectable()
 export class RoomsService {
   constructor(private prisma: PrismaService) {}
@@ -60,6 +69,69 @@ export class RoomsService {
         where: { id: r.id },
         include: { beds: true },
       });
+    });
+
+    return { success: true, data: room };
+  }
+
+  async findOne(propertyId: string, id: string) {
+    const room = await this.prisma.room.findFirst({
+      where: { id, propertyId },
+      include: {
+        beds: {
+          include: {
+            allocations: {
+              where: { isActive: true },
+              include: {
+                tenant: {
+                  include: { user: { select: { name: true, phone: true } } },
+                },
+              },
+            },
+          },
+          orderBy: { label: 'asc' },
+        },
+      },
+    });
+
+    if (!room) throw new NotFoundException('Room not found');
+    return { success: true, data: room };
+  }
+
+  async findOneAllocationHistory(propertyId: string, id: string) {
+    const room = await this.prisma.room.findFirst({
+      where: { id, propertyId },
+      select: { id: true },
+    });
+    if (!room) throw new NotFoundException('Room not found');
+
+    const allocations = await this.prisma.tenantAllocation.findMany({
+      where: { bed: { roomId: id } },
+      include: {
+        tenant: { include: { user: { select: { name: true, phone: true } } } },
+        bed: { select: { label: true } },
+      },
+      orderBy: { startDate: 'desc' },
+    });
+
+    return { success: true, data: allocations };
+  }
+
+  async update(propertyId: string, id: string, dto: UpdateRoomDto) {
+    const existing = await this.prisma.room.findFirst({ where: { id, propertyId } });
+    if (!existing) throw new NotFoundException('Room not found');
+
+    const room = await this.prisma.room.update({
+      where: { id },
+      data: {
+        ...(dto.number !== undefined && { number: dto.number }),
+        ...(dto.floor !== undefined && { floor: dto.floor }),
+        ...(dto.type !== undefined && { type: dto.type }),
+        ...(dto.baseRent !== undefined && { baseRent: new Prisma.Decimal(dto.baseRent) }),
+        ...(dto.amenities !== undefined && { amenities: dto.amenities }),
+        ...(dto.status !== undefined && { status: dto.status }),
+      },
+      include: { beds: true },
     });
 
     return { success: true, data: room };

@@ -2,13 +2,30 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 
 import { calculateCollectionRate, calculateOccupancyRate } from '@pg-system/utils';
 
+import { CacheService } from '../../database/cache.service';
 import { PrismaService } from '../../database/prisma.service';
+
+// Cache TTLs
+const TTL_OPERATOR_DASHBOARD = 120;  // 2 minutes — refreshes fast enough for monitoring
+const TTL_PROPERTY_PERF      = 300;  // 5 minutes — less time-sensitive detail view
 
 @Injectable()
 export class DashboardService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private cache: CacheService,
+  ) {}
 
   async getOperatorDashboard(userId: string) {
+    const now = new Date();
+    const cacheKey = `dashboard:operator:${userId}:${now.getFullYear()}-${now.getMonth() + 1}`;
+
+    return this.cache.wrap(cacheKey, TTL_OPERATOR_DASHBOARD, () =>
+      this._fetchOperatorDashboard(userId),
+    );
+  }
+
+  private async _fetchOperatorDashboard(userId: string) {
     const propertyRoles = await this.prisma.propertyRole.findMany({
       where: { userId },
       include: { property: true },
@@ -95,7 +112,14 @@ export class DashboardService {
     const now = new Date();
     const month = now.getMonth() + 1;
     const year = now.getFullYear();
+    const cacheKey = `dashboard:property:${propertyId}:${year}-${month}`;
 
+    return this.cache.wrap(cacheKey, TTL_PROPERTY_PERF, () =>
+      this._fetchPropertyPerformance(propertyId, now, month, year),
+    );
+  }
+
+  private async _fetchPropertyPerformance(propertyId: string, _now: Date, month: number, year: number) {
     const [beds, activeTenants, rentSummary, complaints, overdueCount] = await Promise.all([
       this.prisma.bed.groupBy({
         by: ['status'],

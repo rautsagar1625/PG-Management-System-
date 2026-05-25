@@ -52,6 +52,13 @@ export async function markSettlementPaid(
   return data.data;
 }
 
+export async function getSettlement(id: string): Promise<Settlement & { property: { id: string; name: string; city: string } }> {
+  const { data } = await apiClient.get<{ success: boolean; data: Settlement & { property: { id: string; name: string; city: string } } }>(
+    `/settlements/${id}`,
+  );
+  return data.data;
+}
+
 export async function getSettlements(propertyId: string, year?: number): Promise<Settlement[]> {
   const { data } = await apiClient.get<{ success: boolean; data: Settlement[] }>(
     `/settlements/property/${propertyId}`,

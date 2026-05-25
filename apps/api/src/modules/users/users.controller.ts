@@ -1,4 +1,4 @@
-import { BadRequestException, Body, Controller, Get, Post, Query, UseGuards } from '@nestjs/common';
+import { BadRequestException, Body, Controller, Get, Patch, Post, Query, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { Throttle } from '@nestjs/throttler';
 
@@ -28,6 +28,24 @@ export class UsersController {
     @Body('token') token: string | null,
   ) {
     return this.usersService.registerPushToken(ctx.userId, token ?? null);
+  }
+
+  @Patch('me')
+  @ApiOperation({ summary: 'Update current user profile (name, phone)' })
+  updateProfile(
+    @CurrentUser() ctx: RequestContext,
+    @Body() dto: { name?: string; phone?: string },
+  ) {
+    return this.usersService.updateProfile(ctx.userId, dto);
+  }
+
+  @Post('me/change-password')
+  @ApiOperation({ summary: 'Change current user password' })
+  changePassword(
+    @CurrentUser() ctx: RequestContext,
+    @Body() dto: { currentPassword: string; newPassword: string },
+  ) {
+    return this.usersService.changePassword(ctx.userId, dto.currentPassword, dto.newPassword);
   }
 
   @Get('search')

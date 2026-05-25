@@ -28,10 +28,12 @@ import {
   markVisited,
   initiateNotice,
   moveOut,
+  getMoveOutPreview,
   roomTransfer,
   type TenantDetail,
   type TenantComplaint,
   type MoveOutDto,
+  type MoveOutPreview,
   type RoomTransferDto,
 } from '@/lib/tenants-api';
 import { getRooms } from '@/lib/rooms-api';
@@ -44,6 +46,17 @@ import {
   type DocumentType,
   DOC_TYPE_LABELS,
 } from '@/lib/kyc-api';
+import {
+  getAgreementsByTenant,
+  createAgreement,
+  sendAgreement,
+  signAgreementByTenant,
+  signAgreementByOwner,
+  cancelAgreement,
+  AGREEMENT_STATUS_LABELS,
+  AGREEMENT_STATUS_STYLES,
+  type RentalAgreement,
+} from '@/lib/agreements-api';
 import { TenantStatusBadge, KycStatusBadge, RentStatusBadge } from '@/components/ui/StatusBadge';
 import { Modal } from '@/components/ui/Modal';
 import { ConfirmModal } from '@/components/ui/ConfirmModal';
@@ -53,7 +66,7 @@ import { Input, FormField } from '@/components/ui/FormField';
 import { type BedInfo } from '@/components/ui/BedGrid';
 import { cn, formatDate, formatCurrency, getInitials } from '@/lib/utils';
 
-type Tab = 'overview' | 'rent' | 'payments' | 'history' | 'kyc';
+type Tab = 'overview' | 'rent' | 'payments' | 'history' | 'kyc' | 'agreements';
 
 export default function TenantDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -219,19 +232,19 @@ export default function TenantDetailPage() {
       </div>
 
       {/* Tabs */}
-      <div className="flex gap-1 border-b border-gray-200">
-        {(['overview', 'rent', 'payments', 'history', 'kyc'] as Tab[]).map((t) => (
+      <div className="flex gap-1 border-b border-gray-200 overflow-x-auto">
+        {(['overview', 'rent', 'payments', 'history', 'kyc', 'agreements'] as Tab[]).map((t) => (
           <button
             key={t}
             onClick={() => setTab(t)}
             className={cn(
-              'px-4 py-2 text-sm font-medium transition-colors border-b-2 -mb-px capitalize',
+              'px-4 py-2 text-sm font-medium transition-colors border-b-2 -mb-px whitespace-nowrap',
               tab === t
                 ? 'border-primary-600 text-primary-700'
                 : 'border-transparent text-gray-500 hover:text-gray-700',
             )}
           >
-            {t === 'history' ? 'Allocations' : t === 'rent' ? 'Rent Cycles' : t === 'kyc' ? 'KYC Docs' : t.charAt(0).toUpperCase() + t.slice(1)}
+            {t === 'history' ? 'Allocations' : t === 'rent' ? 'Rent Cycles' : t === 'kyc' ? 'KYC Docs' : t === 'agreements' ? 'Agreements' : t.charAt(0).toUpperCase() + t.slice(1)}
           </button>
         ))}
       </div>
@@ -242,6 +255,7 @@ export default function TenantDetailPage() {
       {tab === 'payments' && <PaymentsTab tenant={tenant} />}
       {tab === 'history' && <AllocationHistoryTab tenant={tenant} />}
       {tab === 'kyc' && <KycTab tenant={tenant} />}
+      {tab === 'agreements' && <AgreementsTab tenant={tenant} />}
 
       {/* Modals */}
       {modal?.type === 'scheduleVisit' && (
@@ -725,21 +739,43 @@ function MoveOutModal({
   onClose: () => void;
   onSuccess: () => void;
 }) {
+  const [step, setStep] = useState<'preview' | 'confirm'>('preview');
+  const [preview, setPreview] = useState<MoveOutPreview | null>(null);
+  const [previewLoading, setPreviewLoading] = useState(false);
+  const [previewError, setPreviewError] = useState('');
   const [form, setForm] = useState<MoveOutDto>({
     moveOutDate: new Date().toISOString().split('T')[0]!,
     depositRefundAmount: 0,
     depositForfeitAmount: 0,
     notes: '',
   });
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
+  const [submitLoading, setSubmitLoading] = useState(false);
+  const [submitError, setSubmitError] = useState('');
 
-  const depositPaid = Number(tenant.depositBalance);
+  const loadPreview = async () => {
+    if (!form.moveOutDate) { setPreviewError('Move-out date is required'); return; }
+    setPreviewLoading(true);
+    setPreviewError('');
+    try {
+      const data = await getMoveOutPreview(tenant.id);
+      setPreview(data);
+      // Pre-fill refund with estimated amount
+      setForm((f) => ({
+        ...f,
+        depositRefundAmount: data.estimatedRefund > 0 ? data.estimatedRefund : 0,
+        depositForfeitAmount: data.depositBalance - (data.estimatedRefund > 0 ? data.estimatedRefund : 0),
+      }));
+      setStep('confirm');
+    } catch {
+      setPreviewError('Failed to load preview. Please try again.');
+    } finally {
+      setPreviewLoading(false);
+    }
+  };
 
   const submit = async () => {
-    if (!form.moveOutDate) { setError('Move-out date is required'); return; }
-    setLoading(true);
-    setError('');
+    setSubmitLoading(true);
+    setSubmitError('');
     try {
       await moveOut(tenant.id, {
         ...form,
@@ -748,71 +784,131 @@ function MoveOutModal({
       });
       onSuccess();
     } catch {
-      setError('Failed to process move-out. Please try again.');
+      setSubmitError('Failed to process move-out. Please try again.');
     } finally {
-      setLoading(false);
+      setSubmitLoading(false);
     }
   };
 
   return (
-    <Modal isOpen title="Move Out" onClose={onClose} size="sm">
+    <Modal isOpen title={step === 'preview' ? 'Move Out — Set Date' : 'Move Out — Confirm Settlement'} onClose={onClose} size="sm">
       <div className="p-5 space-y-4">
-        <FormField label="Move-out Date" error={error}>
-          <Input
-            type="date"
-            value={form.moveOutDate}
-            onChange={(e) => setForm((f) => ({ ...f, moveOutDate: e.target.value }))}
-          />
-        </FormField>
 
-        {depositPaid > 0 && (
+        {/* Step 1: Date & Notes */}
+        {step === 'preview' && (
           <>
-            <div className="bg-gray-50 rounded-lg p-3 text-sm">
-              <p className="text-gray-500">Deposit on record: <span className="font-semibold text-gray-800">{formatCurrency(depositPaid)}</span></p>
+            <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-sm text-amber-800">
+              <p className="font-medium">Moving out: {tenant.user.name}</p>
+              <p className="text-xs mt-0.5 text-amber-600">This will release their bed and generate a final settlement.</p>
             </div>
-            <FormField label="Deposit Refund Amount">
+
+            <FormField label="Move-out Date">
+              <Input
+                type="date"
+                value={form.moveOutDate}
+                onChange={(e) => { setForm((f) => ({ ...f, moveOutDate: e.target.value })); setPreviewError(''); }}
+              />
+            </FormField>
+
+            <FormField label="Notes (optional)">
+              <textarea
+                value={form.notes ?? ''}
+                onChange={(e) => setForm((f) => ({ ...f, notes: e.target.value }))}
+                className="input-field text-sm resize-none"
+                rows={2}
+                placeholder="Reason, property condition notes..."
+              />
+            </FormField>
+
+            {previewError && (
+              <p className="text-xs text-red-500">{previewError}</p>
+            )}
+
+            <div className="flex gap-2 pt-1">
+              <button onClick={onClose} className="btn-secondary text-sm flex-1">Cancel</button>
+              <button
+                onClick={loadPreview}
+                disabled={previewLoading}
+                className="btn-primary text-sm flex-1 disabled:opacity-50"
+              >
+                {previewLoading ? 'Loading…' : 'Preview Settlement →'}
+              </button>
+            </div>
+          </>
+        )}
+
+        {/* Step 2: Financial Preview + Confirm */}
+        {step === 'confirm' && preview && (
+          <>
+            {/* Financial Summary */}
+            <div className="bg-gray-50 rounded-xl p-4 space-y-2 text-sm">
+              <p className="font-semibold text-gray-700 mb-3">Settlement Summary</p>
+
+              {preview.pendingRentCycles.length > 0 && (
+                <div className="space-y-1 mb-2">
+                  <p className="text-xs text-gray-500 font-medium">Pending Rent Dues</p>
+                  {preview.pendingRentCycles.map((c) => (
+                    <div key={c.id} className="flex justify-between text-xs">
+                      <span className="text-gray-600">{new Date(c.year, c.month - 1).toLocaleString('en-IN', { month: 'short', year: 'numeric' })}</span>
+                      <span className="text-red-600 font-medium">-{formatCurrency(c.remainingAmount)}</span>
+                    </div>
+                  ))}
+                  <div className="flex justify-between text-xs border-t border-gray-200 pt-1 mt-1">
+                    <span className="font-medium text-gray-700">Total Pending</span>
+                    <span className="font-bold text-red-600">-{formatCurrency(preview.totalPendingRent)}</span>
+                  </div>
+                </div>
+              )}
+
+              <div className="flex justify-between">
+                <span className="text-gray-600">Security Deposit</span>
+                <span className="font-medium text-gray-800">{formatCurrency(preview.depositBalance)}</span>
+              </div>
+              <div className="flex justify-between border-t border-gray-200 pt-2 mt-1">
+                <span className="font-semibold text-gray-800">Estimated Refund</span>
+                <span className={`font-bold text-lg ${preview.estimatedRefund >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                  {formatCurrency(Math.abs(preview.estimatedRefund))}
+                  {preview.estimatedRefund < 0 && ' (due from tenant)'}
+                </span>
+              </div>
+            </div>
+
+            {/* Editable refund / forfeiture */}
+            <FormField label="Actual Refund Amount (₹)">
               <Input
                 type="number"
                 value={form.depositRefundAmount}
                 onChange={(e) => setForm((f) => ({ ...f, depositRefundAmount: Number(e.target.value) }))}
-                placeholder="0"
                 min={0}
-                max={depositPaid}
+                max={preview.depositBalance}
               />
             </FormField>
-            <FormField label="Deposit Forfeited Amount">
+            <FormField label="Deposit Forfeited (₹)">
               <Input
                 type="number"
                 value={form.depositForfeitAmount}
                 onChange={(e) => setForm((f) => ({ ...f, depositForfeitAmount: Number(e.target.value) }))}
-                placeholder="0"
                 min={0}
-                max={depositPaid}
+                max={preview.depositBalance}
               />
             </FormField>
+
+            {submitError && (
+              <p className="text-xs text-red-500">{submitError}</p>
+            )}
+
+            <div className="flex gap-2 pt-1">
+              <button onClick={() => setStep('preview')} className="btn-secondary text-sm flex-1">← Back</button>
+              <button
+                onClick={submit}
+                disabled={submitLoading}
+                className="text-sm flex-1 px-4 py-2 rounded-lg bg-red-600 text-white font-medium hover:bg-red-700 disabled:opacity-50 transition-colors"
+              >
+                {submitLoading ? 'Processing…' : 'Confirm Move Out'}
+              </button>
+            </div>
           </>
         )}
-
-        <FormField label="Notes (optional)">
-          <textarea
-            value={form.notes}
-            onChange={(e) => setForm((f) => ({ ...f, notes: e.target.value }))}
-            className="input-field text-sm resize-none"
-            rows={2}
-            placeholder="Reason for move-out, condition notes..."
-          />
-        </FormField>
-
-        <div className="flex gap-2 pt-1">
-          <button onClick={onClose} className="btn-secondary text-sm flex-1">Cancel</button>
-          <button
-            onClick={submit}
-            disabled={loading}
-            className="text-sm flex-1 px-4 py-2 rounded-lg bg-red-600 text-white font-medium hover:bg-red-700 disabled:opacity-50 transition-colors"
-          >
-            {loading ? 'Processing...' : 'Confirm Move Out'}
-          </button>
-        </div>
       </div>
     </Modal>
   );
@@ -1009,6 +1105,259 @@ function KycTab({ tenant }: { tenant: TenantDetail }) {
                   >
                     <Trash2 className="w-3.5 h-3.5" />
                   </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ── Agreements Tab ────────────────────────────────────────────────────────────
+
+function AgreementsTab({ tenant }: { tenant: TenantDetail }) {
+  const qc = useQueryClient();
+  const tenantId = tenant.id;
+  const [showNew, setShowNew] = useState(false);
+  const [form, setForm] = useState({
+    rentAmount: '',
+    depositAmount: '',
+    startDate: new Date().toISOString().split('T')[0]!,
+    endDate: '',
+    terms: 'Standard rental agreement terms apply. Tenant agrees to abide by all property rules.',
+  });
+  const [formError, setFormError] = useState('');
+
+  const { data: agreements = [], isLoading } = useQuery({
+    queryKey: ['agreements', tenantId],
+    queryFn: () => getAgreementsByTenant(tenantId),
+  });
+
+  const createMut = useMutation({
+    mutationFn: () =>
+      createAgreement({
+        tenantId,
+        propertyId: tenant.propertyId,
+        rentAmount: Number(form.rentAmount),
+        depositAmount: Number(form.depositAmount),
+        startDate: form.startDate,
+        endDate: form.endDate || undefined,
+        terms: form.terms,
+      }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['agreements', tenantId] });
+      setShowNew(false);
+      setForm((f) => ({ ...f, rentAmount: '', depositAmount: '', endDate: '' }));
+      toast.success('Agreement created as draft');
+    },
+    onError: () => toast.error('Failed to create agreement'),
+  });
+
+  const sendMut = useMutation({
+    mutationFn: sendAgreement,
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['agreements', tenantId] }); toast.success('Agreement sent to tenant'); },
+    onError: () => toast.error('Failed to send agreement'),
+  });
+
+  const signTenantMut = useMutation({
+    mutationFn: signAgreementByTenant,
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['agreements', tenantId] }); toast.success('Signed by tenant'); },
+    onError: () => toast.error('Failed to mark tenant signature'),
+  });
+
+  const signOwnerMut = useMutation({
+    mutationFn: signAgreementByOwner,
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['agreements', tenantId] }); toast.success('Signed by owner'); },
+    onError: () => toast.error('Failed to mark owner signature'),
+  });
+
+  const cancelMut = useMutation({
+    mutationFn: cancelAgreement,
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['agreements', tenantId] }); toast.success('Agreement cancelled'); },
+    onError: () => toast.error('Failed to cancel agreement'),
+  });
+
+  function handleCreate() {
+    if (!form.rentAmount || !form.depositAmount || !form.startDate) {
+      setFormError('Rent amount, deposit, and start date are required');
+      return;
+    }
+    setFormError('');
+    createMut.mutate();
+  }
+
+  return (
+    <div className="space-y-4">
+      <div className="card p-4">
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="text-sm font-semibold text-gray-700 flex items-center gap-2">
+            <FileText className="w-4 h-4 text-indigo-500" />
+            Rental Agreements
+          </h3>
+          {!showNew && (
+            <button
+              onClick={() => setShowNew(true)}
+              className="btn-primary text-xs flex items-center gap-1.5 px-3 py-1.5"
+            >
+              <Plus className="w-3.5 h-3.5" /> New Agreement
+            </button>
+          )}
+        </div>
+
+        {/* New Agreement Form */}
+        {showNew && (
+          <div className="bg-gray-50 rounded-xl p-4 mb-4 space-y-3 border border-gray-200">
+            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">New Rental Agreement (Draft)</p>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1">Monthly Rent (₹)</label>
+                <input
+                  type="number"
+                  value={form.rentAmount}
+                  onChange={(e) => { setForm((f) => ({ ...f, rentAmount: e.target.value })); setFormError(''); }}
+                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-400"
+                  placeholder="e.g. 8000"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1">Security Deposit (₹)</label>
+                <input
+                  type="number"
+                  value={form.depositAmount}
+                  onChange={(e) => setForm((f) => ({ ...f, depositAmount: e.target.value }))}
+                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-400"
+                  placeholder="e.g. 16000"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1">Start Date</label>
+                <input
+                  type="date"
+                  value={form.startDate}
+                  onChange={(e) => setForm((f) => ({ ...f, startDate: e.target.value }))}
+                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-400"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1">End Date (optional)</label>
+                <input
+                  type="date"
+                  value={form.endDate}
+                  onChange={(e) => setForm((f) => ({ ...f, endDate: e.target.value }))}
+                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-400"
+                />
+              </div>
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1">Agreement Terms</label>
+              <textarea
+                value={form.terms}
+                onChange={(e) => setForm((f) => ({ ...f, terms: e.target.value }))}
+                className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-400 resize-none"
+                rows={3}
+              />
+            </div>
+            {formError && <p className="text-xs text-red-500">{formError}</p>}
+            <div className="flex gap-2 pt-1">
+              <button onClick={() => { setShowNew(false); setFormError(''); }} className="btn-secondary text-xs flex-1 py-1.5">
+                Cancel
+              </button>
+              <button
+                onClick={handleCreate}
+                disabled={createMut.isPending}
+                className="btn-primary text-xs flex-1 py-1.5 disabled:opacity-50"
+              >
+                {createMut.isPending ? 'Creating…' : 'Create Draft'}
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Agreement List */}
+        {isLoading ? (
+          <div className="py-6 flex justify-center">
+            <div className="w-6 h-6 border-2 border-primary-500 border-t-transparent rounded-full animate-spin" />
+          </div>
+        ) : agreements.length === 0 ? (
+          <div className="py-8 text-center">
+            <FileText className="w-8 h-8 text-gray-300 mx-auto mb-2" />
+            <p className="text-sm text-gray-500">No agreements created yet.</p>
+            <p className="text-xs text-gray-400 mt-1">Create a draft agreement to get started.</p>
+          </div>
+        ) : (
+          <div className="space-y-3">
+            {agreements.map((ag: RentalAgreement) => (
+              <div
+                key={ag.id}
+                className="border border-gray-100 rounded-xl p-4 hover:bg-gray-50 transition-colors"
+              >
+                <div className="flex items-start justify-between gap-3 mb-2">
+                  <div>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="text-sm font-semibold text-gray-800">
+                        {formatCurrency(ag.rentAmount)}/mo
+                      </span>
+                      <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${AGREEMENT_STATUS_STYLES[ag.status]}`}>
+                        {AGREEMENT_STATUS_LABELS[ag.status]}
+                      </span>
+                    </div>
+                    <p className="text-xs text-gray-400 mt-0.5">
+                      {formatDate(ag.startDate)}{ag.endDate ? ` → ${formatDate(ag.endDate)}` : ' · Open-ended'} ·
+                      Deposit: {formatCurrency(ag.depositAmount)}
+                    </p>
+                  </div>
+                </div>
+
+                {/* Signature status */}
+                <div className="flex gap-3 text-xs text-gray-500 mb-3">
+                  <span className={ag.signedByTenantAt ? 'text-green-600' : 'text-gray-400'}>
+                    {ag.signedByTenantAt ? `✓ Tenant signed ${formatDate(ag.signedByTenantAt)}` : '○ Tenant unsigned'}
+                  </span>
+                  <span className={ag.signedByOwnerAt ? 'text-green-600' : 'text-gray-400'}>
+                    {ag.signedByOwnerAt ? `✓ Owner signed ${formatDate(ag.signedByOwnerAt)}` : '○ Owner unsigned'}
+                  </span>
+                </div>
+
+                {/* Action buttons per status */}
+                <div className="flex flex-wrap gap-2">
+                  {ag.status === 'DRAFT' && (
+                    <button
+                      onClick={() => sendMut.mutate(ag.id)}
+                      disabled={sendMut.isPending}
+                      className="text-xs bg-blue-50 text-blue-700 hover:bg-blue-100 px-3 py-1 rounded-lg font-medium transition-colors disabled:opacity-50"
+                    >
+                      Send to Tenant
+                    </button>
+                  )}
+                  {(ag.status === 'DRAFT' || ag.status === 'SENT') && !ag.signedByTenantAt && (
+                    <button
+                      onClick={() => signTenantMut.mutate(ag.id)}
+                      disabled={signTenantMut.isPending}
+                      className="text-xs bg-purple-50 text-purple-700 hover:bg-purple-100 px-3 py-1 rounded-lg font-medium transition-colors disabled:opacity-50"
+                    >
+                      Mark Tenant Signed
+                    </button>
+                  )}
+                  {(ag.status === 'DRAFT' || ag.status === 'SENT') && !ag.signedByOwnerAt && (
+                    <button
+                      onClick={() => signOwnerMut.mutate(ag.id)}
+                      disabled={signOwnerMut.isPending}
+                      className="text-xs bg-green-50 text-green-700 hover:bg-green-100 px-3 py-1 rounded-lg font-medium transition-colors disabled:opacity-50"
+                    >
+                      Mark Owner Signed
+                    </button>
+                  )}
+                  {ag.status !== 'CANCELLED' && ag.status !== 'SIGNED' && (
+                    <button
+                      onClick={() => cancelMut.mutate(ag.id)}
+                      disabled={cancelMut.isPending}
+                      className="text-xs text-red-500 hover:text-red-700 hover:bg-red-50 px-3 py-1 rounded-lg font-medium transition-colors disabled:opacity-50"
+                    >
+                      Cancel
+                    </button>
+                  )}
                 </div>
               </div>
             ))}

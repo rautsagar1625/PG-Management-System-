@@ -52,4 +52,11 @@ export class SettlementsController {
   ) {
     return this.settlementsService.getSettlements(propertyId, year);
   }
+
+  @Get(':id')
+  @ApiOperation({ summary: 'Get settlement detail by ID' })
+  @PropertyRoles('OWNER', 'OPERATOR')
+  getSettlement(@Param('id') id: string) {
+    return this.settlementsService.getSettlement(id);
+  }
 }

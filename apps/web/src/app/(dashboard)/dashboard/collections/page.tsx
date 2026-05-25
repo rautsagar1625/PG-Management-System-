@@ -10,7 +10,9 @@ import {
   ChevronDown,
   RefreshCw,
   CheckCircle2,
+  Download,
 } from 'lucide-react';
+import { apiClient } from '@/lib/api';
 import { getCollections, generateCycles, type CollectionCycle } from '@/lib/payments-api';
 import { getProperties } from '@/lib/properties-api';
 import { PageHeader } from '@/components/ui/PageHeader';
@@ -125,6 +127,23 @@ export default function CollectionsPage() {
             >
               <RefreshCw className={`w-4 h-4 ${generating ? 'animate-spin' : ''}`} />
               Generate Cycles
+            </button>
+            <button
+              onClick={async () => {
+                if (!activePropertyId) return;
+                const url = `/export/collections?propertyId=${activePropertyId}&month=${month}&year=${year}&format=xlsx`;
+                const response = await apiClient.get(url, { responseType: 'blob' });
+                const blob = new Blob([response.data as BlobPart], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+                const link = document.createElement('a');
+                link.href = URL.createObjectURL(blob);
+                link.download = `collections-${MONTHS[month - 1]}-${year}.xlsx`;
+                link.click();
+              }}
+              disabled={!activePropertyId}
+              className="btn-secondary text-sm flex items-center gap-1.5 disabled:opacity-50"
+            >
+              <Download className="w-4 h-4" />
+              Export
             </button>
           </div>
         }

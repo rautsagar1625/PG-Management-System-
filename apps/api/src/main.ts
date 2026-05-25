@@ -89,11 +89,39 @@ async function bootstrap() {
     credentials: true,
   });
 
-  // Surface the internally-generated request ID to clients for correlation
+  // Surface the internally-generated request ID to clients for correlation.
+  // Also override Helmet's strict CSP for the Razorpay payment checkout page, which
+  // needs to load an external script (checkout.razorpay.com) and open frames.
   app.getHttpAdapter().getInstance().addHook(
     'onSend',
-    (_req: { id: string }, reply: { header: (k: string, v: string) => void }, _payload: unknown, done: () => void) => {
+    (
+      _req: { id: string; url?: string },
+      reply: { header: (k: string, v: string) => void; removeHeader: (k: string) => void },
+      _payload: unknown,
+      done: () => void,
+    ) => {
       reply.header('X-Request-Id', _req.id);
+
+      // Relax CSP only for the Razorpay checkout HTML page.
+      if (_req.url?.includes('/tenant/pay/checkout')) {
+        reply.removeHeader('Content-Security-Policy');
+        reply.header(
+          'Content-Security-Policy',
+          [
+            "default-src 'self' https:",
+            "script-src 'self' 'unsafe-inline' https://checkout.razorpay.com https://cdn.razorpay.com",
+            "style-src 'self' 'unsafe-inline'",
+            "img-src 'self' data: https:",
+            "connect-src 'self' https://checkout.razorpay.com https://api.razorpay.com https://lumberjack.razorpay.com",
+            "frame-src https://api.razorpay.com https://checkout.razorpay.com",
+            "frame-ancestors 'none'",
+          ].join('; '),
+        );
+        // Disable COEP for this route — Razorpay loads cross-origin resources
+        reply.removeHeader('Cross-Origin-Embedder-Policy');
+        reply.header('Cross-Origin-Embedder-Policy', 'unsafe-none');
+      }
+
       done();
     },
   );

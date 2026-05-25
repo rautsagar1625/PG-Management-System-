@@ -3,6 +3,7 @@ import { Prisma, TenantStatus } from '@prisma/client';
 import { PrismaClientKnownRequestError } from '@prisma/client/runtime/library';
 import { IsEmail, IsNumber, IsOptional, IsString, IsUUID, Min } from 'class-validator';
 import { Type } from 'class-transformer';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
 import type { PaginationQuery, RequestContext } from '@pg-system/types';
 import { buildPaginationMeta, buildPrismaSkipTake, generateTenantCode } from '@pg-system/utils';
@@ -10,22 +11,28 @@ import { buildPaginationMeta, buildPrismaSkipTake, generateTenantCode } from '@p
 import { PrismaService } from '../../database/prisma.service';
 
 export class CreateTenantDto {
+  @ApiProperty({ example: 'Rahul Sharma' })
   @IsString()
   name: string;
 
+  @ApiProperty({ example: 'rahul@example.com' })
   @IsEmail()
   email: string;
 
+  @ApiProperty({ example: '9876543210' })
   @IsString()
   phone: string;
 
+  @ApiProperty({ example: 'uuid-of-property' })
   @IsUUID()
   propertyId: string;
 
+  @ApiPropertyOptional({ example: 'Walk-in', enum: ['Walk-in', 'Website', 'Referral', 'Facebook', 'Instagram', 'JustDial', 'Other'] })
   @IsString()
   @IsOptional()
   leadSource?: string;
 
+  @ApiProperty({ example: 5000, description: 'Security deposit amount in INR' })
   @IsNumber()
   @Min(0)
   @Type(() => Number)

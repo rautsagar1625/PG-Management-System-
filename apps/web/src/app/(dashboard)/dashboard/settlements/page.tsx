@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   Building2,
@@ -35,6 +36,7 @@ const MODEL_LABELS: Record<FinancialModelType, string> = {
 };
 
 export default function SettlementsPage() {
+  const router = useRouter();
   const qc = useQueryClient();
   const now = new Date();
 
@@ -288,7 +290,7 @@ export default function SettlementsPage() {
                 </thead>
                 <tbody className="divide-y divide-gray-100">
                   {settlements.map((s) => (
-                    <tr key={s.id} className="hover:bg-gray-50 transition-colors">
+                    <tr key={s.id} className="hover:bg-gray-50 transition-colors cursor-pointer" onClick={() => router.push(`/dashboard/settlements/${s.id}`)}>
                       <td className="px-4 py-3 font-medium text-gray-900">
                         {MONTHS[s.month - 1]} {s.year}
                       </td>

@@ -205,6 +205,7 @@ export default function RoomsPage() {
 }
 
 function RoomCard({ room }: { room: Room }) {
+  const router = useRouter();
   const beds: BedInfo[] = room.beds.map((b) => ({
     id: b.id,
     label: b.label,
@@ -218,7 +219,7 @@ function RoomCard({ room }: { room: Room }) {
   const reserved = beds.filter((b) => b.status === 'RESERVED').length;
 
   return (
-    <div className="card p-5">
+    <div className="card p-5 hover:shadow-md transition-shadow cursor-pointer" onClick={() => router.push(`/dashboard/rooms/${room.id}`)}>
       {/* Room Header */}
       <div className="flex items-start justify-between mb-4">
         <div className="flex items-center gap-3">

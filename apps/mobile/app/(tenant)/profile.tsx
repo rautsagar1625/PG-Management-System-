@@ -211,6 +211,38 @@ export default function ProfileScreen() {
               </Section>
             )}
 
+            {/* Quick actions section */}
+            <Section title="Account" icon="settings-outline">
+              <TouchableOpacity
+                style={quickStyles.row}
+                onPress={() => router.push('/(tenant)/kyc')}
+                activeOpacity={0.8}
+              >
+                <View style={quickStyles.iconWrap}>
+                  <Ionicons name="shield-checkmark-outline" size={16} color="#6b7280" />
+                </View>
+                <View style={quickStyles.text}>
+                  <Text style={quickStyles.label}>KYC DOCUMENTS</Text>
+                  <Text style={quickStyles.value}>Identity verification documents</Text>
+                </View>
+                <Ionicons name="chevron-forward" size={16} color="#d1d5db" />
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={quickStyles.row}
+                onPress={() => router.push('/(tenant)/agreements')}
+                activeOpacity={0.8}
+              >
+                <View style={quickStyles.iconWrap}>
+                  <Ionicons name="document-text-outline" size={16} color="#6b7280" />
+                </View>
+                <View style={quickStyles.text}>
+                  <Text style={quickStyles.label}>RENTAL AGREEMENTS</Text>
+                  <Text style={quickStyles.value}>View and sign your agreements</Text>
+                </View>
+                <Ionicons name="chevron-forward" size={16} color="#d1d5db" />
+              </TouchableOpacity>
+            </Section>
+
             <TouchableOpacity
               style={styles.logoutBtn}
               onPress={handleLogout}
@@ -277,6 +309,8 @@ const styles = StyleSheet.create({
     marginTop: -16,
   },
 
+  /* Quick nav rows are defined separately */
+
   /* Logout */
   logoutBtn: {
     flexDirection: 'row',
@@ -295,4 +329,26 @@ const styles = StyleSheet.create({
     elevation: 1,
   },
   logoutText: { fontSize: 15, color: colors.red600, fontWeight: '700' },
+});
+
+const quickStyles = StyleSheet.create({
+  row: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f3f4f6',
+  },
+  iconWrap: {
+    width: 32,
+    height: 32,
+    borderRadius: 8,
+    backgroundColor: '#f9fafb',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 12,
+  },
+  text:  { flex: 1 },
+  label: { fontSize: 11, color: '#9ca3af', fontWeight: '500', textTransform: 'uppercase', letterSpacing: 0.4 },
+  value: { fontSize: 14, color: '#111827', fontWeight: '500', marginTop: 2 },
 });

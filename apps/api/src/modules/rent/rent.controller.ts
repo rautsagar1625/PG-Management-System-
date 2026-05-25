@@ -1,5 +1,5 @@
 import { Body, Controller, Get, Param, Post, Put, Query, UseGuards } from '@nestjs/common';
-import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
+import { ApiBearerAuth, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { Throttle } from '@nestjs/throttler';
 
 import type { RequestContext } from '@pg-system/types';
@@ -7,6 +7,7 @@ import type { RequestContext } from '@pg-system/types';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { PropertyRoles, Roles } from '../../common/decorators/roles.decorator';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
+import { ApiAuthResponses, ApiBadRequestResponse, ApiNotFoundResponse, ApiWriteResponses } from '../../common/decorators/api-responses.decorator';
 import { RentService, RecordPaymentDto } from './rent.service';
 
 @ApiTags('Rent')
@@ -18,6 +19,8 @@ export class RentController {
 
   @Post('generate-cycles')
   @ApiOperation({ summary: 'Generate rent cycles for all active tenants in a property' })
+  @ApiResponse({ status: 201, description: 'Rent cycles created (skips already-existing cycles)' })
+  @ApiWriteResponses()
   @PropertyRoles('OWNER', 'OPERATOR', 'CO_OPERATOR')
   generateCycles(@Body() body: { propertyId: string; month: number; year: number }) {
     return this.rentService.generateRentCycles(body.propertyId, body.month, body.year);
@@ -25,6 +28,9 @@ export class RentController {
 
   @Post('payment')
   @ApiOperation({ summary: 'Record a payment (rent, deposit, fine, etc.)' })
+  @ApiResponse({ status: 201, description: 'Payment recorded and receipt generated' })
+  @ApiWriteResponses()
+  @ApiNotFoundResponse()
   @PropertyRoles('OWNER', 'OPERATOR', 'CO_OPERATOR')
   @Throttle({ default: { limit: 20, ttl: 60000 } })
   recordPayment(@Body() dto: RecordPaymentDto, @CurrentUser() ctx: RequestContext) {
@@ -33,6 +39,9 @@ export class RentController {
 
   @Get('tenant/:tenantId/cycles')
   @ApiOperation({ summary: 'Get rent cycles for a tenant' })
+  @ApiResponse({ status: 200, description: 'Filtered list of rent cycles' })
+  @ApiAuthResponses()
+  @ApiNotFoundResponse()
   @PropertyRoles('OWNER', 'OPERATOR', 'CO_OPERATOR', 'STAFF')
   getRentCycles(
     @Param('tenantId') tenantId: string,
@@ -43,6 +52,8 @@ export class RentController {
 
   @Get('property/:propertyId/summary')
   @ApiOperation({ summary: 'Get rent collection summary for a property/month' })
+  @ApiResponse({ status: 200, description: 'Aggregated collection amounts and counts for the month' })
+  @ApiAuthResponses()
   @PropertyRoles('OWNER', 'OPERATOR', 'CO_OPERATOR')
   getSummary(
     @Param('propertyId') propertyId: string,
@@ -53,6 +64,8 @@ export class RentController {
 
   @Get('collections')
   @ApiOperation({ summary: 'Collections center — paginated cycles with tenant/room info' })
+  @ApiResponse({ status: 200, description: 'Paginated rent cycles with tenant and bed info' })
+  @ApiAuthResponses()
   @PropertyRoles('OWNER', 'OPERATOR', 'CO_OPERATOR')
   getCollections(
     @Query()
@@ -79,6 +92,9 @@ export class RentController {
 
   @Get('receipt/:receiptNo')
   @ApiOperation({ summary: 'Get receipt details for display/print' })
+  @ApiResponse({ status: 200, description: 'Receipt with payment, tenant, and property details' })
+  @ApiAuthResponses()
+  @ApiNotFoundResponse()
   @PropertyRoles('OWNER', 'OPERATOR', 'CO_OPERATOR', 'STAFF')
   getReceipt(@Param('receiptNo') receiptNo: string) {
     return this.rentService.getReceipt(receiptNo);
@@ -86,6 +102,8 @@ export class RentController {
 
   @Put('mark-overdue')
   @ApiOperation({ summary: 'Internal: mark eligible cycles as overdue (called by scheduler)' })
+  @ApiResponse({ status: 200, description: 'Returns count of cycles marked as overdue' })
+  @ApiAuthResponses()
   @Roles('SUPER_ADMIN')
   markOverdue() {
     return this.rentService.markOverdueCycles();

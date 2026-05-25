@@ -11,6 +11,7 @@ import { PropertyRoleGuard } from './common/guards/property-role.guard';
 import { SystemRoleGuard } from './common/guards/system-role.guard';
 
 import { DatabaseModule } from './database/database.module';
+import { CacheModule } from './database/cache.module';
 import { EmailModule } from './modules/email/email.module';
 import { PushModule } from './modules/push/push.module';
 import { ExportModule } from './modules/export/export.module';
@@ -71,6 +72,7 @@ import { WhatsAppModule } from './modules/whatsapp/whatsapp.module';
     ScheduleModule.forRoot(),
     ThrottlerModule.forRoot([{ ttl: 60000, limit: 100 }]),
     DatabaseModule,
+    CacheModule,
     EmailModule,
     PushModule,
     HealthModule,

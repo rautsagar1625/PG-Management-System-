@@ -143,6 +143,18 @@ export class SettlementsService {
     return { success: true, data: updated };
   }
 
+  async getSettlement(id: string) {
+    const settlement = await this.prisma.settlement.findUnique({
+      where: { id },
+      include: {
+        financialModel: true,
+        property: { select: { id: true, name: true, city: true } },
+      },
+    });
+    if (!settlement) throw new NotFoundException('Settlement not found');
+    return { success: true, data: settlement };
+  }
+
   async getSettlements(propertyId: string, year?: number) {
     const settlements = await this.prisma.settlement.findMany({
       where: { propertyId, ...(year && { year }) },

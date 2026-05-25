@@ -154,3 +154,25 @@ export async function addPropertyRole(
   );
   return data.data;
 }
+
+export async function getPropertyRoles(propertyId: string): Promise<PropertyRole[]> {
+  const { data } = await apiClient.get<{ success: boolean; data: PropertyRole[] }>(
+    `/properties/${propertyId}/roles`,
+  );
+  return data.data;
+}
+
+export async function removePropertyRole(propertyId: string, roleId: string): Promise<void> {
+  await apiClient.delete(`/properties/${propertyId}/roles/${roleId}`);
+}
+
+export async function lookupUserByEmail(
+  propertyId: string,
+  email: string,
+): Promise<{ id: string; name: string; email: string; phone: string | null }> {
+  const { data } = await apiClient.get<{
+    success: boolean;
+    data: { id: string; name: string; email: string; phone: string | null };
+  }>(`/properties/${propertyId}/roles/lookup?email=${encodeURIComponent(email)}`);
+  return data.data;
+}

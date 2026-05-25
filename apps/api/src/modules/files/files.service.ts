@@ -14,7 +14,7 @@ import { ConfigService } from '@nestjs/config';
 import { FileEntityType, FileStatus } from '@prisma/client';
 
 import { PrismaService } from '../../database/prisma.service';
-import type { ConfirmUploadDto, CreateUploadUrlDto } from './dto/files.dto';
+import type { ConfirmUploadDto, CreateUploadUrlDto, UploadBase64Dto } from './dto/files.dto';
 
 // Allowed MIME types → max upload size in bytes
 const ALLOWED_MIME_TYPES = new Map<string, number>([
@@ -184,6 +184,87 @@ export class FilesService {
         createdAt: true,
       },
     });
+  }
+
+  /**
+   * Server-side base64 upload — used by mobile clients that cannot do direct
+   * browser→S3 PUT uploads. Accepts base64-encoded file content, decodes it,
+   * and uploads directly from the server. Max size enforced per MIME type.
+   */
+  async uploadBase64(dto: UploadBase64Dto, uploadedBy: string) {
+    this.assertConfigured();
+
+    const maxSizeBytes = ALLOWED_MIME_TYPES.get(dto.mimeType);
+    if (!maxSizeBytes) {
+      throw new BadRequestException(
+        `MIME type "${dto.mimeType}" is not allowed. Allowed: ${[...ALLOWED_MIME_TYPES.keys()].join(', ')}`,
+      );
+    }
+
+    // Decode; strip optional data-URI prefix (e.g. "data:image/jpeg;base64,")
+    const rawBase64 = dto.base64Data.includes(',') ? dto.base64Data.split(',')[1]! : dto.base64Data;
+    let buffer: Buffer;
+    try {
+      buffer = Buffer.from(rawBase64, 'base64');
+    } catch {
+      throw new BadRequestException('Invalid base64 data');
+    }
+
+    if (buffer.length > maxSizeBytes) {
+      throw new BadRequestException(
+        `File too large: ${(buffer.length / 1024 / 1024).toFixed(1)} MB. Max ${(maxSizeBytes / 1024 / 1024).toFixed(0)} MB.`,
+      );
+    }
+
+    const ext = MIME_TO_EXT[dto.mimeType] ?? '';
+    const baseName = this.sanitizeFileName(dto.fileName);
+    const key = `${dto.entityType.toLowerCase()}/${dto.entityId}/${crypto.randomUUID()}-${baseName}${ext}`;
+
+    const fileUpload = await this.prisma.fileUpload.create({
+      data: {
+        key,
+        bucket: this.bucket,
+        fileName: path.basename(dto.fileName).slice(0, 200),
+        mimeType: dto.mimeType,
+        entityType: dto.entityType,
+        entityId: dto.entityId,
+        uploadedBy,
+        status: FileStatus.PENDING,
+      },
+    });
+
+    try {
+      const command = new PutObjectCommand({
+        Bucket: this.bucket,
+        Key: key,
+        Body: buffer,
+        ContentType: dto.mimeType,
+        ContentLength: buffer.length,
+        Metadata: {
+          'file-upload-id': fileUpload.id,
+          'uploaded-by': uploadedBy,
+          'entity-type': dto.entityType,
+          'entity-id': dto.entityId,
+        },
+      });
+      await this.s3!.send(command);
+    } catch (err) {
+      // Mark as failed so the cron can clean it up
+      await this.prisma.fileUpload.update({
+        where: { id: fileUpload.id },
+        data: { status: FileStatus.FAILED },
+      });
+      this.logger.error(`S3 upload failed for fileId=${fileUpload.id}`, err);
+      throw new BadRequestException('File upload to storage failed. Please try again.');
+    }
+
+    const confirmed = await this.prisma.fileUpload.update({
+      where: { id: fileUpload.id },
+      data: { status: FileStatus.UPLOADED, sizeBytes: buffer.length },
+      select: { id: true, fileName: true, mimeType: true, sizeBytes: true, entityType: true, entityId: true, createdAt: true },
+    });
+
+    return { success: true, data: confirmed };
   }
 
   // Expire PENDING records older than 30 minutes (called by a cron)
