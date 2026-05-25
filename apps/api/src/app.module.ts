@@ -3,7 +3,7 @@ import { ConfigModule } from '@nestjs/config';
 import { APP_GUARD } from '@nestjs/core';
 import { EventEmitterModule } from '@nestjs/event-emitter';
 import { ScheduleModule } from '@nestjs/schedule';
-import { ThrottlerModule } from '@nestjs/throttler';
+import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 import * as Joi from 'joi';
 
 import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
@@ -104,7 +104,13 @@ import { WhatsAppModule } from './modules/whatsapp/whatsapp.module';
     WhatsAppModule,
   ],
   providers: [
-    // Global guard chain — order matters: auth → system role → property role
+    // Global guard chain — order matters: throttle → auth → system role → property role.
+    // ThrottlerGuard runs first (IP-based, no DB lookup) so a flood is dropped before
+    // we spend any time on JWT validation or role checks.
+    // Default limit: 100 req/min per IP (overridden per-route with @Throttle).
+    // NOTE: uses in-memory storage — replace with ThrottlerStorageRedisService when
+    // running multiple API replicas to share the counter across instances.
+    { provide: APP_GUARD, useClass: ThrottlerGuard },
     { provide: APP_GUARD, useClass: JwtAuthGuard },
     { provide: APP_GUARD, useClass: SystemRoleGuard },
     { provide: APP_GUARD, useClass: PropertyRoleGuard },
