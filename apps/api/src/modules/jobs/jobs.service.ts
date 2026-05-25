@@ -74,6 +74,37 @@ export class JobsService implements OnModuleInit {
     return this.overdueQueue.add(JOB_MARK_OVERDUE, {}, { attempts: 3 });
   }
 
+  /**
+   * SP4-1: Failed job inspection endpoint.
+   * Returns up to 100 most recent failed jobs across all managed queues so
+   * operators can investigate without needing direct Redis access.
+   * Jobs are retained for up to 500 entries (removeOnFail in module config).
+   */
+  async getFailedJobs(limit = 20) {
+    const [rentFailed, overdueFailed] = await Promise.all([
+      this.rentCycleQueue.getFailed(0, limit - 1),
+      this.overdueQueue.getFailed(0, limit - 1),
+    ]);
+
+    const toSummary = (job: Awaited<ReturnType<Queue['getFailed']>>[number], queue: string) => ({
+      queue,
+      jobId: job.id,
+      jobName: job.name,
+      attemptsMade: job.attemptsMade,
+      failedReason: job.failedReason,
+      payload: job.data,
+      failedAt: job.finishedOn ? new Date(job.finishedOn).toISOString() : null,
+    });
+
+    return {
+      success: true,
+      data: [
+        ...rentFailed.map((j) => toSummary(j, QUEUE_RENT_CYCLE)),
+        ...overdueFailed.map((j) => toSummary(j, QUEUE_OVERDUE)),
+      ].sort((a, b) => (b.failedAt ?? '').localeCompare(a.failedAt ?? '')).slice(0, limit),
+    };
+  }
+
   /** Every 30 minutes — expire PENDING upload records whose presigned URL has lapsed. */
   @Cron('*/30 * * * *', { name: 'expire-stale-uploads' })
   async expireStalePendingUploads() {

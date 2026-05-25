@@ -90,17 +90,21 @@ async function bootstrap() {
   });
 
   // Surface the internally-generated request ID to clients for correlation.
+  // SP5-4: Also emit X-Response-Time (ms) so APM tools and Nginx logs can track latency.
+  // Fastify sets reply.elapsedTime internally (ms since request received) — no extra
+  // onRequest hook needed.
   // Also override Helmet's strict CSP for the Razorpay payment checkout page, which
   // needs to load an external script (checkout.razorpay.com) and open frames.
   app.getHttpAdapter().getInstance().addHook(
     'onSend',
     (
       _req: { id: string; url?: string },
-      reply: { header: (k: string, v: string) => void; removeHeader: (k: string) => void },
+      reply: { header: (k: string, v: string) => void; removeHeader: (k: string) => void; elapsedTime: number },
       _payload: unknown,
       done: () => void,
     ) => {
       reply.header('X-Request-Id', _req.id);
+      reply.header('X-Response-Time', `${reply.elapsedTime.toFixed(2)}ms`);
 
       // Relax CSP only for the Razorpay checkout HTML page.
       if (_req.url?.includes('/tenant/pay/checkout')) {
@@ -126,12 +130,46 @@ async function bootstrap() {
     },
   );
 
+  // SP4-5: Graceful shutdown — drain BullMQ workers before exit.
+  // `enableShutdownHooks` listens for SIGTERM/SIGINT and calls the
+  // `OnApplicationShutdown` lifecycle hook. `@nestjs/bullmq` uses that
+  // hook to call `worker.close()` which lets in-progress jobs finish
+  // before the process exits. The manual handler adds a hard timeout so
+  // the container (ECS / k8s) can always reclaim the pod in finite time.
+  app.enableShutdownHooks();
+
   await app.listen(port, '0.0.0.0');
-  Logger.log(`API running on http://localhost:${port}/${apiPrefix}`, 'Bootstrap');
+
+  const logger = new Logger('Bootstrap');
+  logger.log(`API running on http://localhost:${port}/${apiPrefix}`);
 
   if (!isProd) {
-    Logger.log(`Swagger docs at http://localhost:${port}/docs`, 'Bootstrap');
+    logger.log(`Swagger docs at http://localhost:${port}/docs`);
   }
+
+  const SHUTDOWN_TIMEOUT_MS = 15_000; // 15 s — enough for in-flight BullMQ jobs
+
+  process.on('SIGTERM', () => {
+    logger.log('SIGTERM received — starting graceful shutdown');
+
+    // Hard-kill timer so we never hang inside a container scheduler.
+    const killTimer = setTimeout(() => {
+      logger.error('Graceful shutdown timed out after 15 s — forcing exit');
+      process.exit(1);
+    }, SHUTDOWN_TIMEOUT_MS);
+    killTimer.unref(); // don't let this timer keep the event loop alive
+
+    app
+      .close()
+      .then(() => {
+        logger.log('Application shutdown complete');
+        process.exit(0);
+      })
+      .catch((err: Error) => {
+        logger.error(`Error during shutdown: ${err.message}`);
+        process.exit(1);
+      });
+  });
 }
 
 bootstrap();

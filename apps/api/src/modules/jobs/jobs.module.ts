@@ -4,6 +4,7 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
 
 import { FilesModule } from '../files/files.module';
 import { RentModule } from '../rent/rent.module';
+import { JobsController } from './jobs.controller';
 import { JobsService } from './jobs.service';
 import { QUEUE_NOTIFICATIONS, QUEUE_OVERDUE, QUEUE_RENT_CYCLE } from './jobs.constants';
 import { OverdueProcessor } from './processors/overdue.processor';
@@ -20,7 +21,9 @@ import { RentCycleProcessor } from './processors/rent-cycle.processor';
         },
         defaultJobOptions: {
           removeOnComplete: { count: 100 },
-          removeOnFail: { count: 200 },
+          // SP4-1: keep 500 failed jobs so ops can inspect them via /jobs/failed
+          // without needing direct Redis access. DLQ handler logs + Sentry captures each.
+          removeOnFail: { count: 500 },
         },
       }),
       inject: [ConfigService],
@@ -33,6 +36,7 @@ import { RentCycleProcessor } from './processors/rent-cycle.processor';
     RentModule,
     FilesModule,
   ],
+  controllers: [JobsController],
   providers: [JobsService, RentCycleProcessor, OverdueProcessor],
   exports: [JobsService, BullModule],
 })
