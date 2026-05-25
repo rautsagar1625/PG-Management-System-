@@ -3,15 +3,17 @@ import {
   Text,
   StyleSheet,
   FlatList,
+  ScrollView,
   RefreshControl,
+  TouchableOpacity,
   ActivityIndicator,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { useAuth } from '../../src/context/AuthContext';
 import { useAsync } from '../../src/lib/hooks';
 import { api } from '../../src/lib/api';
+import { useOperatorProperty } from '../../src/hooks/useOperatorProperty';
 import { colors } from '../../src/theme';
 
 interface Bed {
@@ -41,11 +43,10 @@ function fmt(n: number) {
 }
 
 export default function RoomsScreen() {
-  const { user } = useAuth();
   const { top } = useSafeAreaInsets();
 
-  const propertyId =
-    (user as unknown as { properties?: Array<{ id: string }> })?.properties?.[0]?.id ?? '';
+  // WF-001: property picker — replaces hardcoded properties[0]
+  const { properties, propertyId, setPropertyId } = useOperatorProperty();
 
   const { data: rooms, loading, refetch } = useAsync(async () => {
     if (!propertyId) return [];
@@ -72,6 +73,29 @@ export default function RoomsScreen() {
         <Text style={styles.heroSub}>
           {(rooms ?? []).length} room{(rooms ?? []).length !== 1 ? 's' : ''}
         </Text>
+
+        {/* Property chip strip — only rendered when operator has multiple properties */}
+        {properties.length > 1 && (
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.propStrip}
+          >
+            {properties.map((p) => (
+              <TouchableOpacity
+                key={p.id}
+                onPress={() => setPropertyId(p.id)}
+                style={[styles.propChip, p.id === propertyId && styles.propChipActive]}
+                activeOpacity={0.75}
+              >
+                <Text style={[styles.propChipText, p.id === propertyId && styles.propChipTextActive]}>
+                  {p.name}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
+        )}
+
         <View style={styles.heroStrip}>
           <View style={styles.heroStripItem}>
             <Text style={styles.heroStripValue}>{occupiedCount}</Text>
@@ -164,7 +188,18 @@ const styles = StyleSheet.create({
     borderWidth: 40, borderColor: 'rgba(255,255,255,0.05)',
   },
   heroTitle: { fontSize: 26, fontWeight: '800', color: '#fff', letterSpacing: -0.5 },
-  heroSub: { fontSize: 13, color: 'rgba(255,255,255,0.6)', marginTop: 2, marginBottom: 16 },
+  heroSub: { fontSize: 13, color: 'rgba(255,255,255,0.6)', marginTop: 2, marginBottom: 10 },
+
+  propStrip: { flexDirection: 'row', gap: 8, paddingBottom: 12 },
+  propChip: {
+    paddingHorizontal: 12, paddingVertical: 6,
+    borderRadius: 20, backgroundColor: 'rgba(255,255,255,0.15)',
+    borderWidth: 1, borderColor: 'rgba(255,255,255,0.2)',
+  },
+  propChipActive: { backgroundColor: '#fff' },
+  propChipText: { fontSize: 12, fontWeight: '600', color: 'rgba(255,255,255,0.8)' },
+  propChipTextActive: { color: colors.primary },
+
   heroStrip: {
     flexDirection: 'row', backgroundColor: 'rgba(255,255,255,0.1)',
     borderRadius: 14, padding: 14,

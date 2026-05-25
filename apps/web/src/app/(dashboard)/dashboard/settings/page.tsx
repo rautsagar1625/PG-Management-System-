@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { User, Lock, Bell, Shield, Check, Eye, EyeOff } from 'lucide-react';
 import { toast } from 'sonner';
@@ -324,13 +324,31 @@ const NOTIFICATION_EVENTS = [
   { key: 'settlement_ready', label: 'Settlement Ready', description: 'When a monthly settlement is calculated' },
 ];
 
+const NOTIF_PREFS_KEY = 'pg:notif-prefs';
+
+const DEFAULT_PREFS = Object.fromEntries(
+  NOTIFICATION_EVENTS.map(({ key }) => [key, { email: true, push: true }]),
+);
+
+function loadPrefs(): Record<string, { email: boolean; push: boolean }> {
+  try {
+    const raw = localStorage.getItem(NOTIF_PREFS_KEY);
+    if (!raw) return DEFAULT_PREFS;
+    // Merge stored with defaults so new events added later get sensible defaults
+    return { ...DEFAULT_PREFS, ...(JSON.parse(raw) as Record<string, { email: boolean; push: boolean }>) };
+  } catch {
+    return DEFAULT_PREFS;
+  }
+}
+
 function NotificationsSection() {
-  const [prefs, setPrefs] = useState<Record<string, { email: boolean; push: boolean }>>(() =>
-    Object.fromEntries(
-      NOTIFICATION_EVENTS.map(({ key }) => [key, { email: true, push: true }]),
-    ),
-  );
+  const [prefs, setPrefs] = useState<Record<string, { email: boolean; push: boolean }>>(DEFAULT_PREFS);
   const [saved, setSaved] = useState(false);
+
+  // Hydrate from localStorage after mount (avoids SSR mismatch)
+  useEffect(() => {
+    setPrefs(loadPrefs());
+  }, []);
 
   function toggle(key: string, channel: 'email' | 'push') {
     setPrefs((p) => ({ ...p, [key]: { ...p[key]!, [channel]: !p[key]![channel] } }));
@@ -338,7 +356,12 @@ function NotificationsSection() {
   }
 
   function save() {
-    // TODO: persist to API when notification preferences endpoint is added
+    try {
+      localStorage.setItem(NOTIF_PREFS_KEY, JSON.stringify(prefs));
+    } catch {
+      // Quota exceeded or private-browsing — silently ignore; prefs are still
+      // live in state for this session.
+    }
     setSaved(true);
     toast.success('Notification preferences saved');
     setTimeout(() => setSaved(false), 2500);

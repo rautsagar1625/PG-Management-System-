@@ -3,6 +3,7 @@ import {
   Text,
   StyleSheet,
   FlatList,
+  ScrollView,
   TouchableOpacity,
   RefreshControl,
   ActivityIndicator,
@@ -11,9 +12,9 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useState } from 'react';
-import { useAuth } from '../../src/context/AuthContext';
 import { useAsync } from '../../src/lib/hooks';
 import { api } from '../../src/lib/api';
+import { useOperatorProperty } from '../../src/hooks/useOperatorProperty';
 import { colors } from '../../src/theme';
 
 interface AttendanceRecord {
@@ -40,12 +41,11 @@ function formatTime(iso: string): string {
 }
 
 export default function AttendanceLogScreen() {
-  const { user } = useAuth();
   const { top } = useSafeAreaInsets();
   const [selectedDate, setSelectedDate] = useState(toDateString(new Date()));
 
-  const propertyId =
-    (user as unknown as { properties?: Array<{ id: string }> })?.properties?.[0]?.id ?? '';
+  // WF-001: property picker — replaces hardcoded properties[0]
+  const { properties, propertyId, setPropertyId } = useOperatorProperty();
 
   const { data: records, loading, refetch } = useAsync(async () => {
     if (!propertyId || !selectedDate) return [];
@@ -99,6 +99,28 @@ export default function AttendanceLogScreen() {
       >
         <View style={styles.heroRing} />
         <Text style={styles.heroTitle}>Attendance Log</Text>
+
+        {/* Property chip strip — only rendered when operator has multiple properties */}
+        {properties.length > 1 && (
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.propStrip}
+          >
+            {properties.map((p) => (
+              <TouchableOpacity
+                key={p.id}
+                onPress={() => setPropertyId(p.id)}
+                style={[styles.propChip, p.id === propertyId && styles.propChipActive]}
+                activeOpacity={0.75}
+              >
+                <Text style={[styles.propChipText, p.id === propertyId && styles.propChipTextActive]}>
+                  {p.name}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
+        )}
 
         {/* Date navigation */}
         <View style={styles.dateNav}>
@@ -199,7 +221,17 @@ const styles = StyleSheet.create({
     width: 200, height: 200, borderRadius: 100,
     borderWidth: 40, borderColor: 'rgba(255,255,255,0.05)',
   },
-  heroTitle: { fontSize: 26, fontWeight: '800', color: '#fff', letterSpacing: -0.5, marginBottom: 12 },
+  heroTitle: { fontSize: 26, fontWeight: '800', color: '#fff', letterSpacing: -0.5, marginBottom: 10 },
+
+  propStrip: { flexDirection: 'row', gap: 8, paddingBottom: 10 },
+  propChip: {
+    paddingHorizontal: 12, paddingVertical: 6,
+    borderRadius: 20, backgroundColor: 'rgba(255,255,255,0.15)',
+    borderWidth: 1, borderColor: 'rgba(255,255,255,0.2)',
+  },
+  propChipActive: { backgroundColor: '#fff' },
+  propChipText: { fontSize: 12, fontWeight: '600', color: 'rgba(255,255,255,0.8)' },
+  propChipTextActive: { color: colors.primary },
 
   dateNav: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 16, marginBottom: 16 },
   dateArrow: { width: 32, height: 32, borderRadius: 16, backgroundColor: 'rgba(255,255,255,0.15)', alignItems: 'center', justifyContent: 'center' },
