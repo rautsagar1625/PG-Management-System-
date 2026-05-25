@@ -36,6 +36,12 @@ const mockPrisma = {
     updateMany: jest.fn(),
     update: jest.fn(),
   },
+  passwordReset: {
+    create: jest.fn(),
+    update: jest.fn(),
+    findFirst: jest.fn(),
+    updateMany: jest.fn(),
+  },
 };
 
 const mockJwt = {
@@ -178,6 +184,7 @@ describe('AuthService', () => {
       mockPrisma.session.findUnique.mockResolvedValueOnce({
         id: 's1',
         token: 'valid-token',
+        familyId: 'family-abc',
         revokedAt: null,
         expiresAt: new Date(Date.now() + 3_600_000),
         user,
@@ -188,6 +195,74 @@ describe('AuthService', () => {
       const result = await service.refresh('valid-token');
       expect(result).toHaveProperty('accessToken');
       expect(result).toHaveProperty('refreshToken');
+    });
+
+    // ── Token family tracking (RB-005) ─────────────────────────────────────
+
+    it('RB-005: replay attack — revokes entire token family and throws', async () => {
+      // Scenario: an attacker replays an already-used (revoked) refresh token
+      // that has not yet expired. This is the theft signal.
+      mockPrisma.session.findUnique.mockResolvedValueOnce({
+        id: 's1',
+        token: 'stolen-token',
+        familyId: 'family-xyz',
+        revokedAt: new Date(Date.now() - 5_000), // already revoked (used)
+        expiresAt: new Date(Date.now() + 3_600_000), // but not expired yet
+        user: makeUser(),
+      });
+      mockPrisma.session.updateMany.mockResolvedValueOnce({ count: 3 });
+
+      await expect(service.refresh('stolen-token')).rejects.toBeInstanceOf(UnauthorizedException);
+
+      // Must revoke ALL active sessions in the same family
+      expect(mockPrisma.session.updateMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({ familyId: 'family-xyz', revokedAt: null }),
+          data: expect.objectContaining({ revokedAt: expect.any(Date) }),
+        }),
+      );
+    });
+
+    it('RB-005: normal rotation — new session inherits the familyId', async () => {
+      const user = makeUser();
+      const familyId = 'family-rotate-test';
+
+      mockPrisma.session.findUnique.mockResolvedValueOnce({
+        id: 's1',
+        token: 'rotate-token',
+        familyId,
+        revokedAt: null,
+        expiresAt: new Date(Date.now() + 3_600_000),
+        user,
+      });
+      mockPrisma.session.update.mockResolvedValueOnce({});
+      mockPrisma.session.create.mockResolvedValueOnce({ id: 's2' });
+
+      await service.refresh('rotate-token');
+
+      // New session must carry the same familyId, not generate a fresh one
+      expect(mockPrisma.session.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({ familyId }),
+        }),
+      );
+    });
+
+    it('RB-005: expired revoked token — throws generic error (not family revocation)', async () => {
+      // Expired + revoked = stale token, not a replay signal (attacker cannot use it)
+      mockPrisma.session.findUnique.mockResolvedValueOnce({
+        id: 's1',
+        token: 'expired-token',
+        familyId: 'family-old',
+        revokedAt: new Date(Date.now() - 10_000),
+        expiresAt: new Date(Date.now() - 5_000), // also expired
+        user: makeUser(),
+      });
+
+      await expect(service.refresh('expired-token')).rejects.toBeInstanceOf(UnauthorizedException);
+
+      // Should NOT call updateMany — this is not a theft signal
+      expect(mockPrisma.session.updateMany).not.toHaveBeenCalled();
     });
   });
 });

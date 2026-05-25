@@ -238,4 +238,77 @@ describe('RentService', () => {
       expect(mockCache.delPattern).toHaveBeenCalledWith('dashboard:operator:prop-1:*');
     });
   });
+
+  // ── generateRentCycles — idempotency across concurrent calls ─────────────
+
+  describe('generateRentCycles — idempotency', () => {
+    // generateRentCycles uses tenant.findMany with include: { allocations } so the
+    // tenant fixture must carry the allocations array for the service to proceed.
+    const tenantWithAllocation = {
+      ...makeTenant(),
+      allocations: [{ id: 'alloc-1', monthlyRent: new Decimal('8000'), isActive: true }],
+    };
+
+    beforeEach(() => {
+      mockPrisma.tenant.findMany.mockResolvedValue([tenantWithAllocation]);
+    });
+
+    it('does not create a duplicate cycle when one already exists for month+year', async () => {
+      // findUnique is used to check existing cycle (tenantId_month_year unique constraint)
+      mockPrisma.rentCycle.findUnique.mockResolvedValue(makeRentCycle());
+
+      const result = await service.generateRentCycles('prop-1', 5, 2024);
+
+      expect(result.generated).toBe(0);
+      expect(result.total).toBe(1);
+      expect(mockPrisma.rentCycle.create).not.toHaveBeenCalled();
+    });
+
+    it('creates a cycle when none exists for the month+year', async () => {
+      mockPrisma.rentCycle.findUnique.mockResolvedValue(null);
+      mockPrisma.rentCycle.create.mockResolvedValue(makeRentCycle());
+
+      const result = await service.generateRentCycles('prop-1', 5, 2024);
+
+      expect(result.generated).toBe(1);
+      expect(mockPrisma.rentCycle.create).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  // ── recordPayment — cache invalidation scope ─────────────────────────────
+
+  describe('recordPayment — property-scoped cache invalidation', () => {
+    it('PF-002: invalidates property-scoped cache key, not global wildcard', async () => {
+      mockPrisma.payment.findFirst.mockResolvedValueOnce(null);
+
+      mockPrisma.$transaction.mockImplementation(async (fn: (tx: unknown) => Promise<unknown>) => {
+        const txMock = {
+          tenant: { findUnique: jest.fn().mockResolvedValue(makeTenant()) },
+          rentCycle: {
+            findFirst: jest.fn().mockResolvedValue(makeRentCycle()),
+            findUnique: jest.fn().mockResolvedValue(makeRentCycle()),
+            update: jest.fn().mockResolvedValue({ ...makeRentCycle(), status: 'PAID' }),
+          },
+          payment: { create: jest.fn().mockResolvedValue(makePayment()) },
+          receipt: { create: jest.fn().mockResolvedValue({ id: 'r1', receiptNo: 'RCP-001' }) },
+        };
+        return fn(txMock);
+      });
+
+      await service.recordPayment(
+        {
+          tenantId: 'tenant-1',
+          rentCycleId: 'cycle-1',
+          amount: 8000,
+          method: 'UPI',
+          paidAt: new Date().toISOString(),
+        },
+        'op-user',
+      );
+
+      // Must invalidate ONLY this property's dashboard cache, not all operator caches
+      expect(mockCache.delPattern).toHaveBeenCalledWith('dashboard:operator:prop-1:*');
+      expect(mockCache.delPattern).not.toHaveBeenCalledWith('dashboard:operator:*');
+    });
+  });
 });
