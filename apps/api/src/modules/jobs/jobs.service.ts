@@ -8,6 +8,7 @@ import { FilesService } from '../files/files.service';
 import {
   JOB_GENERATE_RENT_CYCLES,
   JOB_MARK_OVERDUE,
+  QUEUE_NOTIFICATIONS,
   QUEUE_OVERDUE,
   QUEUE_RENT_CYCLE,
 } from './jobs.constants';
@@ -19,6 +20,7 @@ export class JobsService implements OnModuleInit {
   constructor(
     @InjectQueue(QUEUE_RENT_CYCLE) private readonly rentCycleQueue: Queue,
     @InjectQueue(QUEUE_OVERDUE) private readonly overdueQueue: Queue,
+    @InjectQueue(QUEUE_NOTIFICATIONS) private readonly notificationsQueue: Queue,
     private readonly filesService: FilesService,
   ) {}
 
@@ -102,6 +104,32 @@ export class JobsService implements OnModuleInit {
         ...rentFailed.map((j) => toSummary(j, QUEUE_RENT_CYCLE)),
         ...overdueFailed.map((j) => toSummary(j, QUEUE_OVERDUE)),
       ].sort((a, b) => (b.failedAt ?? '').localeCompare(a.failedAt ?? '')).slice(0, limit),
+    };
+  }
+
+  /**
+   * OB-6: Queue depth snapshot for ops visibility.
+   * Returns waiting / active / failed / delayed / completed counts for each
+   * managed queue so platform admins can spot backlogs without Redis access.
+   * Counts are fetched in parallel to keep latency minimal.
+   */
+  async getQueueMetrics() {
+    const [rentCounts, overdueCounts, notificationCounts] = await Promise.all([
+      this.rentCycleQueue.getJobCounts('waiting', 'active', 'failed', 'delayed', 'completed'),
+      this.overdueQueue.getJobCounts('waiting', 'active', 'failed', 'delayed', 'completed'),
+      this.notificationsQueue.getJobCounts('waiting', 'active', 'failed', 'delayed', 'completed'),
+    ]);
+
+    return {
+      success: true,
+      data: {
+        queues: [
+          { name: QUEUE_RENT_CYCLE, ...rentCounts },
+          { name: QUEUE_OVERDUE, ...overdueCounts },
+          { name: QUEUE_NOTIFICATIONS, ...notificationCounts },
+        ],
+        fetchedAt: new Date().toISOString(),
+      },
     };
   }
 

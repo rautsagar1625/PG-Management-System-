@@ -1,5 +1,5 @@
-import { Controller, Get } from '@nestjs/common';
-import { ApiOperation, ApiTags } from '@nestjs/swagger';
+import { Controller, Get, Res } from '@nestjs/common';
+import { ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 
 import { Public } from '../../common/decorators/public.decorator';
 import { CacheService } from '../../database/cache.service';
@@ -19,9 +19,11 @@ export class HealthController {
     summary: 'Health check — returns DB, Redis, and uptime status',
     description:
       'Returns HTTP 200 when all components are healthy, HTTP 503 when any critical ' +
-      'dependency is degraded. Used by Kubernetes readiness probes.',
+      'dependency is degraded. Used by Kubernetes readiness probes and load balancers.',
   })
-  async check() {
+  @ApiResponse({ status: 200, description: 'All components healthy' })
+  @ApiResponse({ status: 503, description: 'One or more components degraded or down' })
+  async check(@Res({ passthrough: true }) reply: { status(code: number): void }) {
     const start = Date.now();
 
     // ── Database ─────────────────────────────────────────────────────────────
@@ -59,8 +61,13 @@ export class HealthController {
       },
     };
 
-    // Return 503 when any component is unhealthy so Kubernetes removes this pod
-    // from the load balancer pool until it recovers
+    // OB-1: Return 503 so Kubernetes readiness probes and load-balancer health
+    // checks remove this pod from the pool when any component is unhealthy.
+    // Previously the handler always returned 200 — making the comment above a lie.
+    if (overallStatus !== 'ok') {
+      reply.status(503);
+    }
+
     return response;
   }
 }

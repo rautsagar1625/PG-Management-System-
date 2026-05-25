@@ -1,6 +1,7 @@
 // Sentry MUST be initialised before any other imports that might throw
 import './instrument';
 
+import * as Sentry from '@sentry/node';
 import { Logger, ValidationPipe } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { NestFactory } from '@nestjs/core';
@@ -129,6 +130,29 @@ async function bootstrap() {
       done();
     },
   );
+
+  // OB-5: Enrich every request log with userId once JWT is decoded.
+  // The JWT guard runs before route handlers and attaches `request.user`.
+  // By hooking preHandler (after auth) we can pull userId into the pino
+  // child-logger so every log line for this request carries it automatically.
+  app.getHttpAdapter().getInstance().addHook(
+    'preHandler',
+    (
+      req: { user?: { userId?: string }; log: { setBindings?: (b: Record<string, unknown>) => void; child?: (b: Record<string, unknown>) => unknown } },
+      _reply: unknown,
+      done: () => void,
+    ) => {
+      if (req.user?.userId && req.log.setBindings) {
+        req.log.setBindings({ userId: req.user.userId });
+      }
+      done();
+    },
+  );
+
+  // OB-2: Wire Sentry's Fastify error handler so unhandled route errors are
+  // captured as Sentry events with their transaction context attached.
+  // Must be called after the app is fully configured but before listen().
+  Sentry.setupFastifyErrorHandler(app.getHttpAdapter().getInstance());
 
   // SP4-5: Graceful shutdown — drain BullMQ workers before exit.
   // `enableShutdownHooks` listens for SIGTERM/SIGINT and calls the

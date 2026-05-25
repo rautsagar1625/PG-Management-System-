@@ -13,6 +13,18 @@ import { JobsService } from './jobs.service';
 export class JobsController {
   constructor(private jobsService: JobsService) {}
 
+  @Get('queues')
+  @ApiOperation({
+    summary: 'Queue depth metrics — waiting/active/failed/delayed/completed counts per queue',
+    description:
+      'Returns a real-time snapshot of all managed BullMQ queue depths. ' +
+      'Use this to spot backlogs, failed-job spikes, or stalled workers without ' +
+      'needing direct Redis access. Restricted to SUPER_ADMIN.',
+  })
+  getQueueMetrics() {
+    return this.jobsService.getQueueMetrics();
+  }
+
   @Get('failed')
   @ApiOperation({
     summary: 'Inspect failed background jobs — DLQ view for ops',
