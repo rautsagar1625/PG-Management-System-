@@ -1,187 +1,95 @@
 # PG Management System — Roadmap
 
 > **Last updated:** 2026-05-26  
-> **Branch:** staging (15 commits ahead of main)  
-> **State:** ~95% complete — backend 100%, web 90%, mobile 80%, infra 100%
+> **Branch:** staging (17 commits ahead of main)  
+> **State:** ~98% complete — all features implemented, API + web + mobile all compile clean, 144 tests passing
 
 ---
 
 ## What's Done
 
-### ✅ Sprint 1 — Core Platform (completed)
+### ✅ Sprint 1 — Core Platform
 - NestJS + Fastify + Prisma monorepo bootstrap
 - Auth (JWT access/refresh tokens, password reset, email verification)
 - Multi-property RBAC (`OWNER / OPERATOR / CO_OPERATOR / STAFF / TENANT`)
-- PostgreSQL schema (27 models) + all migrations
+- PostgreSQL schema (27 models) + migrations
 - BullMQ job queues (rent-cycle, overdue, notifications)
-- Email via Resend (`EmailModule`)
-- Expo push notifications (`PushModule`)
-- Rate limiting, request logging, correlation IDs
+- Email via Resend, Expo push notifications, rate limiting
 
-### ✅ Sprint 2 — Financial Engine (completed)
+### ✅ Sprint 2 — Financial Engine
 - Rent cycle generation + overdue marking (scheduled jobs)
-- Partial payment support with running `remainingAmount`
+- Partial payment support, idempotent settlement recalculation
 - Settlement engine: `REVENUE_SHARE` + `FIXED_PAYOUT` models
-- PDF receipts (Puppeteer) — `GET /receipts/:id/pdf`
-- Idempotent settlement recalculation
+- PDF receipts via Puppeteer
 
-### ✅ Sprint 3 — Tenant Lifecycle (completed)
-- Multi-step tenant onboarding workflow (`LEAD → ACTIVE`)
-- Bed allocation + room transfer
-- Move-out workflow with financial preview + deposit handling
-- Tenant state machine guards
+### ✅ Sprint 3 — Tenant Lifecycle
+- Multi-step tenant onboarding (`LEAD → ACTIVE`)
+- Bed allocation, room transfer, move-out with financial preview
 
-### ✅ Sprint 4 — Feature Expansion (completed)
-- Lead CRM (pipeline: NEW → QUALIFIED → VISIT → CONVERTED/LOST)
-- Food menu management
-- Attendance tracking
-- Autopay configuration
-- Rental agreements with PDF generation + tenant/owner signing
+### ✅ Sprint 4 — Feature Expansion
+- Lead CRM, Food menu, Attendance tracking, Autopay configuration
+- Rental agreements (PDF + tenant/owner digital signing)
 - WhatsApp notifications via Twilio
-- KYC document upload + operator verification workflow
-- Razorpay payment gateway (live keys)
+- KYC document upload + operator verification
+- Razorpay payment gateway (live keys + webhook)
 
-### ✅ Sprint 5 — Web App (completed)
-- Next.js dashboard with enterprise visual redesign
-- Properties, Rooms, Tenants, Collections, Settlements pages
-- Tenant detail: Overview, Rent, Payments, History, KYC, Agreements tabs
-- Multi-step property wizard (create property with rooms + beds)
-- Analytics / dashboard aggregates
+### ✅ Sprint 5 — Web App
+- 15 dashboard pages — Properties, Rooms (with detail), Tenants (with detail), Collections, Settlements (with detail), Leads, Complaints, Attendance, Food Menu, Autopay, Overdue, Analytics, Audit Logs, Settings
+- Property detail: Overview + Rooms + Tenants + Financials + Performance + **Team** tabs
+- Tenant detail: Overview + Rent + Payments + History + KYC + Agreements tabs
+- Multi-step property creation wizard
 
-### ✅ Sprint 6 — Mobile App (completed)
-- Expo/React Native tenant app (home, payments, profile, complaints)
-- Operator app (dashboard, tenants, rooms, collections, settlements, attendance-log, leads)
-- Push notification deep-linking
-- `useOperatorProperty` hook — multi-property chip strip on operator screens
+### ✅ Sprint 6 — Mobile App
+- Expo/React Native: all 9 operator screens + 8 tenant screens
+- Razorpay checkout wired in tenant payments screen
+- KYC camera/gallery upload with `expo-image-picker`
+- Add Tenant FAB + modal on operator tenants screen
+- Record Payment modal on operator collections screen
+- Push notification deep-linking via `expo-router`
+- `useOperatorProperty` hook + multi-property chip strip
 
-### ✅ Sprint 7 — Observability (completed)
-- Sentry integration (API + web + mobile) with transaction tracing
-- `GET /health` detailed endpoint (DB ping, Redis ping, queue depth)
-- `GET /jobs/queues` — BullMQ queue depth metrics across all 3 queues
-- Prometheus metrics via `@willsoto/nestjs-prometheus`
-- Grafana dashboard JSON in `docs/grafana-dashboard.json`
+### ✅ Sprint 7 — Observability
+- Sentry (API + web + mobile), Prometheus metrics
+- `GET /health` + `GET /jobs/queues` (BullMQ depth metrics)
+- Grafana dashboard JSON
 
-### ✅ Sprint 8 — Web & Mobile Feature Completion (completed)
-- Notification preferences: full stack (JSONB schema + API + React Query UI)
+### ✅ Sprint 8 — Completion & Hardening
+- Notification preferences: JSONB schema + full-stack API + React Query UI
 - WhatsApp status + test-message endpoint + Integrations tab in Settings
-- Settings page: Profile, Notifications, Security, Integrations tabs
-- CI/CD: staging branch added to GitHub Actions push/PR triggers
-- Deployment: `render.yaml` Blueprint (API + Web + Postgres 16 + Redis)
-- `.env.staging` template with inline documentation
+- CI/CD: staging branch in GitHub Actions push/PR triggers
+- Deployment: `render.yaml` Blueprint + `.env.staging` + `apps/web/.env.example`
 - Tests: 144 passing across 9 spec files (dashboard, leads, complaints, kyc added)
+- Code quality sweep: replaced all `console.log`, `as any`, raw `Error` throws, typed catch clauses
 
 ---
 
-## What Remains
+## Genuinely Remaining (~2 days)
 
-### 🔧 API Layer Gaps (small surface, high value)
+### 🚀 Staging → Production Deployment
 
-| Item | File | Work |
-|------|------|------|
-| Room edit endpoint | `rooms.controller.ts` | `PATCH /rooms/:id` — add `UpdateRoomDto`, `RoomsService.update()` |
-| Bed edit endpoint | `beds.controller.ts` | `PATCH /beds/:id` — add `UpdateBedDto`, `BedsService.update()` |
-| Property role management | `properties.controller.ts` | `GET/POST/DELETE /properties/:id/roles` — add/remove operators |
+This is the only real work left. Everything else is code-complete.
 
----
+**Checklist before go-live:**
 
-### 🌐 Web UI Gaps
-
-#### Room Detail Page  
-**Route:** `/dashboard/rooms/[id]`  
-Currently the rooms grid is read-only — clicking has nowhere to go.
-
-```
-/dashboard/rooms/[id]
-  ├── Header: Room name, type, floor, base rent — inline edit
-  ├── Bed Grid (reuse existing BedGrid component)
-  │   ├── OCCUPIED → tenant name + rent chip → tenant detail link
-  │   └── AVAILABLE → "Allocate Bed" action
-  └── Allocation History tab
-```
-
-**Files to create:**
-- `apps/web/src/app/(dashboard)/dashboard/rooms/[id]/page.tsx`
-
----
-
-#### Property Team Tab  
-**Route:** `/dashboard/properties/[id]` → new "Team" tab  
-No UI to see or manage who has operator/staff roles on a property.
-
-```
-Team tab:
-├── List: avatar, name, role badge, date added, remove [✕]
-├── [+ Add Member] → user search → role picker → POST /properties/:id/roles
-└── OWNER row is un-removable
-```
-
-**Files to create:**
-- `apps/web/src/lib/properties-api.ts` (add `getPropertyRoles`, `addPropertyRole`, `removePropertyRole`)
-- Add TeamTab component + tab to property detail page
-
----
-
-#### Move-Out UI Polish  
-The API `PUT /tenants/:id/move-out` + `GET /tenants/:id/move-out-preview` exist. The web flow currently has no structured 2-step modal.
-
-```
-Step 1 — Preview:
-  Pending dues, deposit, deductions, refund amount, move-out date picker
-Step 2 — ConfirmModal (existing component)
-```
-
----
-
-#### Settlement Detail Page  
-**Route:** `/dashboard/settlements/[id]`  
-Currently settlements list exists but no detail/drill-down view.
-
-```
-  Period, property, parties (owner/operator), financial model
-  ├── Total collections, shares, payout amounts
-  ├── Status chip + [Mark as Settled] action
-  └── [Download PDF]
-```
-
----
-
-### 📱 Mobile Gaps
-
-| Item | Screen | Status |
-|------|--------|--------|
-| Razorpay checkout wiring | `(tenant)/payments.tsx` | SDK installed, checkout not triggered |
-| Add Tenant flow (multi-step) | `(operator)/tenants/new.tsx` | Screen doesn't exist |
-| Record payment quick-action | `(operator)/collections.tsx` | Long-press bottom sheet missing |
-| KYC document camera upload | `(tenant)/kyc.tsx` | Picker not wired |
-
----
-
-### 🚀 Pre-Launch Checklist
-
-Before promoting staging → main and going live:
-
-- [ ] **Merge staging → main** (15 commits pending; CI now validates staging)
+- [ ] **Merge staging → main** (17 commits pending; CI validates the branch)
 - [ ] **Provision Render.com** using `render.yaml` — set all env vars in Render dashboard
-- [ ] **Seed production DB** — `pnpm db:migrate:prod` + run seed for initial admin user
-- [ ] **Configure real Twilio number** — replace sandbox `+14155238886` with verified sender
+  - Copy from `apps/api/.env.staging` (fill in real secrets)
+  - Copy from `apps/web/.env.example` (set `NEXT_PUBLIC_API_URL` to production API URL)
+- [ ] **Run DB migration** — `pnpm db:migrate:prod` against production Postgres
+- [ ] **Seed initial admin** — create first SUPER_ADMIN user via seed script or direct DB
+- [ ] **Configure Twilio** — replace sandbox `+14155238886` with a verified sender number
 - [ ] **Verify Razorpay webhooks** — set webhook URL to `https://api.yourdomain.com/api/v1/razorpay/webhook`
-- [ ] **Set Sentry DSN** — real project DSNs for API, web, and mobile
-- [ ] **Load test** — k6 or Artillery: 50 concurrent operators, 200 req/s for 5 minutes
-- [ ] **Smoke test checklist** — login → create property → add tenant → record payment → generate receipt → settlement → WhatsApp reminder
+- [ ] **Set Sentry DSN** — real project DSNs for API, web, and mobile builds
+- [ ] **Smoke test** — login → create property + rooms → onboard tenant → record payment → generate receipt → run settlement → send WhatsApp reminder
 
----
+### 🔬 Nice-to-Have (polish, not blocking launch)
 
-## Timeline
-
-| Work | Estimate |
-|------|----------|
-| API gaps (3 endpoints) | 0.5 day |
-| Room detail page | 1 day |
-| Property team tab | 1 day |
-| Move-out + settlement UI | 1 day |
-| Mobile Razorpay + add tenant flow | 2 days |
-| Provisioning + smoke test | 1 day |
-| **Total remaining** | **~7 days** |
+| Item | Effort | Notes |
+|------|--------|-------|
+| API Swagger `@ApiResponse` decorators | 1 day | Add typed response schemas to all endpoints |
+| E2E Playwright test coverage | 2–3 days | Auth + tenant workflow + payment flow |
+| Load test (k6) | 0.5 day | 50 concurrent ops, verify no N+1 queries under load |
+| Mobile app store submission | 1 day | App Store + Play Store listing + screenshots |
 
 ---
 
@@ -189,14 +97,15 @@ Before promoting staging → main and going live:
 
 ```
 pg-system/
-├── apps/api/      NestJS + Fastify — 29 modules, 87+ endpoints
-├── apps/web/      Next.js 14 App Router — 15 dashboard pages
-├── apps/mobile/   Expo 51 — tenant + operator tabs
+├── apps/api/      NestJS + Fastify — 29 modules, 87+ endpoints, 144 tests
+├── apps/web/      Next.js 14 App Router — 15 dashboard pages (all complete)
+├── apps/mobile/   Expo 51 — 9 operator + 8 tenant screens (all complete)
 ├── prisma/        27 models, 10 migrations
 └── packages/      types, constants, validations, utils, ui
 ```
 
-**Job queues:** `rent-cycle-queue` (monthly generation), `overdue-queue` (daily mark), `notifications-queue` (email + push)  
+**Job queues:** `rent-cycle-queue` (monthly), `overdue-queue` (daily), `notifications-queue` (email + push)  
 **Cache:** Redis via `CacheService.wrap()` — dashboard TTL 2 min, property perf TTL 5 min  
 **Observability:** Sentry + Prometheus + `/health` + `/jobs/queues`  
-**Deploy target:** Render.com (see `render.yaml`) — Singapore region, Postgres 16, Redis noeviction
+**Deploy target:** Render.com (see `render.yaml`) — Singapore region, Postgres 16, Redis noeviction  
+**CI:** GitHub Actions on push/PR to `main`, `develop`, `staging` — lint + typecheck + test + Docker build
