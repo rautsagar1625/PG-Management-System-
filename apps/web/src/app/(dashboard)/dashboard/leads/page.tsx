@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   Building2,
@@ -130,6 +131,7 @@ function timeAgo(dateStr: string): string {
 // ── Main component ────────────────────────────────────────────────────
 
 export default function LeadsPage() {
+  const router = useRouter();
   const qc = useQueryClient();
 
   const [selectedPropertyId, setSelectedPropertyId] = useState('');
@@ -214,6 +216,22 @@ export default function LeadsPage() {
 
   const handleStatusAction = (lead: Lead, status: string) => {
     statusMutation.mutate({ id: lead.id, status, notes: statusNotes || undefined });
+  };
+
+  /**
+   * Instead of directly marking CONVERTED (which requires a tenantId via PUT /leads/:id/convert),
+   * we navigate to the Add Tenant wizard pre-filled with lead data.
+   * The wizard calls convertLead(leadId, tenantId) after the tenant is created.
+   */
+  const handleConvertToTenant = (lead: Lead) => {
+    const params = new URLSearchParams({
+      propertyId: lead.propertyId,
+      leadId:     lead.id,
+      name:       lead.name,
+      phone:      lead.phone,
+      ...(lead.email ? { email: lead.email } : {}),
+    });
+    router.push(`/dashboard/tenants/new?${params.toString()}`);
   };
 
   return (
@@ -427,6 +445,7 @@ export default function LeadsPage() {
           statusNotes={statusNotes}
           onNotesChange={setStatusNotes}
           onStatusAction={handleStatusAction}
+          onConvertToTenant={handleConvertToTenant}
           onScheduleVisit={() => setShowVisitModal(true)}
           isPending={statusMutation.isPending}
           onClose={() => setViewingLead(null)}
@@ -530,6 +549,7 @@ function LeadDetailModal({
   statusNotes,
   onNotesChange,
   onStatusAction,
+  onConvertToTenant,
   onScheduleVisit,
   isPending,
   onClose,
@@ -538,6 +558,7 @@ function LeadDetailModal({
   statusNotes: string;
   onNotesChange: (v: string) => void;
   onStatusAction: (lead: Lead, status: string) => void;
+  onConvertToTenant: (lead: Lead) => void;
   onScheduleVisit: () => void;
   isPending: boolean;
   onClose: () => void;
@@ -679,11 +700,11 @@ function LeadDetailModal({
             )}
             {(lead.status === 'TOKEN_PAID' || lead.status === 'NEGOTIATING') && (
               <ActionButton
-                label="Convert to Tenant"
+                label="Convert to Tenant →"
                 icon={CheckCircle2}
                 cls="bg-green-600 hover:bg-green-700 text-white"
-                onClick={() => onStatusAction(lead, 'CONVERTED')}
-                isPending={isPending}
+                onClick={() => onConvertToTenant(lead)}
+                isPending={false}
               />
             )}
             {lead.status !== 'CONVERTED' && lead.status !== 'LOST' && (

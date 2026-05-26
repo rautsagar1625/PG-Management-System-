@@ -46,3 +46,8 @@ export const scheduleVisit = (id: string, visitDate: string) =>
   apiClient
     .put(`/leads/${id}/schedule-visit`, { visitDate })
     .then((r) => r.data.data as Lead);
+
+export const convertLead = (id: string, tenantId: string) =>
+  apiClient
+    .put(`/leads/${id}/convert`, { tenantId })
+    .then((r) => r.data.data as Lead);

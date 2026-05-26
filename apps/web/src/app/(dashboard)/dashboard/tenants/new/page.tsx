@@ -13,6 +13,7 @@ import {
   moveIn,
   type Tenant,
 } from '@/lib/tenants-api';
+import { convertLead } from '@/lib/leads-api';
 import { FormField, Input, SelectField } from '@/components/ui/FormField';
 import { BedGrid, type BedInfo } from '@/components/ui/BedGrid';
 import { OccupancyBar } from '@/components/ui/OccupancyBar';
@@ -135,12 +136,20 @@ export default function NewTenantPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const initialPropertyId = searchParams.get('propertyId') ?? '';
+  // Pre-fill from lead (when navigating from the Lead Pipeline "Convert to Tenant" action)
+  const prefillName  = searchParams.get('name') ?? '';
+  const prefillPhone = searchParams.get('phone') ?? '';
+  const prefillEmail = searchParams.get('email') ?? '';
+  const leadId       = searchParams.get('leadId') ?? '';
 
   const [step, setStep] = useState<StepId>(1);
   const [completedUpTo, setCompletedUpTo] = useState<StepId>(0 as StepId);
   const [state, setState] = useState<OnboardingState>({
     ...initialState,
     propertyId: initialPropertyId,
+    name:  prefillName,
+    phone: prefillPhone,
+    email: prefillEmail,
   });
   const [error, setError] = useState('');
 
@@ -175,6 +184,14 @@ export default function NewTenantPage() {
         await markVisited(tenant.id);
       } catch {
         // markVisited may be a no-op if the lead state transition is already past VISITED — safe to ignore
+      }
+      // If we arrived here from the Lead Pipeline, link the lead → tenant
+      if (leadId) {
+        try {
+          await convertLead(leadId, tenant.id);
+        } catch {
+          // Non-critical: lead status update failing should not block tenant onboarding
+        }
       }
       advance(2);
     },
