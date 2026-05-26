@@ -48,6 +48,27 @@ export class UsersController {
     return this.usersService.changePassword(ctx.userId, dto.currentPassword, dto.newPassword);
   }
 
+  @Get('me/notification-preferences')
+  @ApiOperation({
+    summary: 'Get notification preferences for the current user',
+    description: 'Returns the stored per-event email/push toggle map. Null means all notifications are on (default).',
+  })
+  getNotificationPreferences(@CurrentUser() ctx: RequestContext) {
+    return this.usersService.getNotificationPreferences(ctx.userId);
+  }
+
+  @Patch('me/notification-preferences')
+  @ApiOperation({
+    summary: 'Update notification preferences',
+    description: 'Persists a map of {eventKey: {email: boolean, push: boolean}}. Overwrites any previous value.',
+  })
+  updateNotificationPreferences(
+    @CurrentUser() ctx: RequestContext,
+    @Body() body: { preferences: Record<string, { email: boolean; push: boolean }> },
+  ) {
+    return this.usersService.updateNotificationPreferences(ctx.userId, body.preferences);
+  }
+
   @Get('search')
   @ApiOperation({ summary: 'Search users by name/email/phone (for adding to property)' })
   @Throttle({ default: { limit: 10, ttl: 60_000 } })

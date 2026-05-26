@@ -28,7 +28,8 @@ model User {
   isVerified     Boolean    @default(false)
   isActive       Boolean    @default(true)
   lastLoginAt    DateTime?
-  expoPushToken  String?
+  expoPushToken          String?
+  notificationPreferences Json?   // {event_key: {email: bool, push: bool}} — null = all on
   createdAt      DateTime   @default(now())
   updatedAt      DateTime   @updatedAt
 

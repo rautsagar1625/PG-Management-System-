@@ -61,6 +61,30 @@ export class UsersService {
     return { success: true };
   }
 
+  // ── Notification preferences ──────────────────────────────────────────────
+
+  /** Returns stored prefs, or null if the user has never saved preferences (= all on). */
+  async getNotificationPreferences(userId: string) {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { notificationPreferences: true },
+    });
+    if (!user) throw new NotFoundException('User not found');
+    return { success: true, data: { preferences: user.notificationPreferences ?? null } };
+  }
+
+  /** Persists the full preferences map. Overwrites any previous value. */
+  async updateNotificationPreferences(
+    userId: string,
+    preferences: Record<string, { email: boolean; push: boolean }>,
+  ) {
+    await this.prisma.user.update({
+      where: { id: userId },
+      data: { notificationPreferences: preferences },
+    });
+    return { success: true, data: { preferences } };
+  }
+
   async search(query: string) {
     const users = await this.prisma.user.findMany({
       where: {

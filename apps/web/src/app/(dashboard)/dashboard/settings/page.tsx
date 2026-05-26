@@ -24,6 +24,18 @@ async function changePassword(dto: { currentPassword: string; newPassword: strin
   return data;
 }
 
+async function getNotificationPreferences(): Promise<Record<string, { email: boolean; push: boolean }> | null> {
+  const { data } = await apiClient.get<{ success: boolean; data: { preferences: Record<string, { email: boolean; push: boolean }> | null } }>(
+    '/users/me/notification-preferences',
+  );
+  return data.data.preferences;
+}
+
+async function saveNotificationPreferences(preferences: Record<string, { email: boolean; push: boolean }>) {
+  const { data } = await apiClient.patch<{ success: boolean }>('/users/me/notification-preferences', { preferences });
+  return data;
+}
+
 // ── Types ─────────────────────────────────────────────────────────────────────
 
 type SettingsTab = 'profile' | 'security' | 'notifications';
@@ -324,47 +336,45 @@ const NOTIFICATION_EVENTS = [
   { key: 'settlement_ready', label: 'Settlement Ready', description: 'When a monthly settlement is calculated' },
 ];
 
-const NOTIF_PREFS_KEY = 'pg:notif-prefs';
-
 const DEFAULT_PREFS = Object.fromEntries(
   NOTIFICATION_EVENTS.map(({ key }) => [key, { email: true, push: true }]),
 );
 
-function loadPrefs(): Record<string, { email: boolean; push: boolean }> {
-  try {
-    const raw = localStorage.getItem(NOTIF_PREFS_KEY);
-    if (!raw) return DEFAULT_PREFS;
-    // Merge stored with defaults so new events added later get sensible defaults
-    return { ...DEFAULT_PREFS, ...(JSON.parse(raw) as Record<string, { email: boolean; push: boolean }>) };
-  } catch {
-    return DEFAULT_PREFS;
-  }
-}
-
 function NotificationsSection() {
-  const [prefs, setPrefs] = useState<Record<string, { email: boolean; push: boolean }>>(DEFAULT_PREFS);
-  const [saved, setSaved] = useState(false);
+  const qc = useQueryClient();
 
-  // Hydrate from localStorage after mount (avoids SSR mismatch)
+  // Fetch stored prefs from the API; fall back to defaults while loading
+  const { data: storedPrefs, isLoading: prefsLoading } = useQuery({
+    queryKey: ['notification-preferences'],
+    queryFn: getNotificationPreferences,
+  });
+
+  const [prefs, setPrefs] = useState<Record<string, { email: boolean; push: boolean }>>(DEFAULT_PREFS);
+
+  // Hydrate local state once API data arrives; merge with defaults for forward-compat
   useEffect(() => {
-    setPrefs(loadPrefs());
-  }, []);
+    if (storedPrefs) {
+      setPrefs({ ...DEFAULT_PREFS, ...storedPrefs });
+    }
+  }, [storedPrefs]);
+
+  const saveMutation = useMutation({
+    mutationFn: () => saveNotificationPreferences(prefs),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['notification-preferences'] });
+      toast.success('Notification preferences saved');
+    },
+    onError: () => toast.error('Failed to save preferences'),
+  });
+
+  const saved = saveMutation.isSuccess && !saveMutation.isPending;
 
   function toggle(key: string, channel: 'email' | 'push') {
     setPrefs((p) => ({ ...p, [key]: { ...p[key]!, [channel]: !p[key]![channel] } }));
-    setSaved(false);
   }
 
   function save() {
-    try {
-      localStorage.setItem(NOTIF_PREFS_KEY, JSON.stringify(prefs));
-    } catch {
-      // Quota exceeded or private-browsing — silently ignore; prefs are still
-      // live in state for this session.
-    }
-    setSaved(true);
-    toast.success('Notification preferences saved');
-    setTimeout(() => setSaved(false), 2500);
+    saveMutation.mutate();
   }
 
   return (
@@ -404,9 +414,10 @@ function NotificationsSection() {
       <div className="flex justify-end">
         <button
           onClick={save}
-          className="flex items-center gap-2 px-5 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors"
+          disabled={saveMutation.isPending || prefsLoading}
+          className="flex items-center gap-2 px-5 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50"
         >
-          {saved ? <><Check className="w-4 h-4" /> Saved</> : 'Save Preferences'}
+          {saveMutation.isPending ? 'Saving…' : saved ? <><Check className="w-4 h-4" /> Saved</> : 'Save Preferences'}
         </button>
       </div>
     </div>
