@@ -304,6 +304,13 @@ export default function OperatorDashboard() {
           bg={colors.violetBg}
           onPress={() => router.push('/(operator)/attendance-log' as never)}
         />
+        <QuickAction
+          icon="restaurant-outline"
+          label="Food Menu"
+          color="#d97706"
+          bg="#fef3c7"
+          onPress={() => router.push('/(operator)/food-menu' as never)}
+        />
       </View>
 
       {g && (

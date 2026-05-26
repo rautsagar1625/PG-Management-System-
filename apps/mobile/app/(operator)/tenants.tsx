@@ -659,7 +659,7 @@ export default function TenantsScreen() {
         activeOpacity={0.85}
       >
         <Ionicons name="person-add" size={20} color="#fff" />
-        <Text style={styles.fabText}>Add Lead</Text>
+        <Text style={styles.fabText}>Add Tenant</Text>
       </TouchableOpacity>
 
       <AddTenantModal

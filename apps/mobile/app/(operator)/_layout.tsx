@@ -104,6 +104,7 @@ export default function OperatorLayout() {
       <Tabs.Screen name="rooms" options={{ href: null, title: 'Rooms' }} />
       <Tabs.Screen name="settlements" options={{ href: null, title: 'Settlements' }} />
       <Tabs.Screen name="attendance-log" options={{ href: null, title: 'Attendance Log' }} />
+      <Tabs.Screen name="food-menu" options={{ href: null, title: 'Food Menu' }} />
     </Tabs>
   );
 }

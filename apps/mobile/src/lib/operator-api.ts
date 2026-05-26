@@ -256,3 +256,37 @@ export async function createTenant(dto: CreateTenantDto): Promise<CreatedTenant>
   const res = await api.post<{ success: boolean; data: CreatedTenant }>('/tenants', dto);
   return res.data;
 }
+
+// ── Food Menu ─────────────────────────────────────────────────────────────────
+
+export interface FoodMenuEntry {
+  id: string;
+  propertyId: string;
+  dayOfWeek: number; // 0=Sun..6=Sat
+  mealType: 'BREAKFAST' | 'LUNCH' | 'EVENING_SNACK' | 'DINNER';
+  items: string[];
+  timing?: string;
+  isActive: boolean;
+}
+
+export async function getFoodMenu(propertyId: string): Promise<FoodMenuEntry[]> {
+  const res = await api.get<{ success: boolean; data: FoodMenuEntry[] }>(
+    `/food-menu?propertyId=${propertyId}`,
+  );
+  return res.data ?? [];
+}
+
+export async function upsertFoodMenu(
+  dto: Omit<FoodMenuEntry, 'id' | 'isActive'>,
+): Promise<FoodMenuEntry> {
+  const res = await api.post<{ success: boolean; data: FoodMenuEntry }>('/food-menu', dto);
+  return res.data;
+}
+
+export async function updateFoodMenuEntry(
+  id: string,
+  dto: Partial<Pick<FoodMenuEntry, 'items' | 'timing' | 'isActive'>>,
+): Promise<FoodMenuEntry> {
+  const res = await api.put<{ success: boolean; data: FoodMenuEntry }>(`/food-menu/${id}`, dto);
+  return res.data;
+}

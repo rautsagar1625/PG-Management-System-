@@ -23,6 +23,10 @@ const BREADCRUMB_MAP: Record<string, string> = {
   '/dashboard/leads': 'Lead Pipeline',
   '/dashboard/food-menu': 'Food Menu',
   '/dashboard/attendance': 'Attendance',
+  '/dashboard/analytics': 'Analytics',
+  '/dashboard/autopay': 'Autopay',
+  '/dashboard/settings': 'Settings',
+  '/dashboard/receipts': 'Receipts',
 };
 
 function getPageTitle(pathname: string): string {
