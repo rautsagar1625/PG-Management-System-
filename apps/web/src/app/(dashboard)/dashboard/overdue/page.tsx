@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useCallback, useEffect } from 'react';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'next/navigation';
 import {
   AlertTriangle,
@@ -9,15 +9,27 @@ import {
   Building2,
   ChevronDown,
   ExternalLink,
+  MessageCircle,
+  CheckCircle2,
 } from 'lucide-react';
+import { toast } from 'sonner';
 import { getCollections, type CollectionCycle } from '@/lib/payments-api';
 import { getProperties } from '@/lib/properties-api';
+import { apiClient } from '@/lib/api';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { PageLoader } from '@/components/ui/LoadingSpinner';
 import { PaymentModal } from '@/components/modals/PaymentModal';
 import { formatCurrency, formatDate } from '@/lib/utils';
 import { useDebounce } from '@/hooks/useDebounce';
+
+async function sendBulkWhatsAppReminder(propertyId: string) {
+  const { data } = await apiClient.post<{
+    success: boolean;
+    data: { totalOverdue: number; sent: number; skipped: number };
+  }>('/whatsapp/bulk-reminder', { propertyId });
+  return data.data;
+}
 
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
@@ -35,6 +47,16 @@ export default function OverduePage() {
   const [selectedPropertyId, setSelectedPropertyId] = useState('');
   const [search, setSearch] = useState('');
   const [paymentTarget, setPaymentTarget] = useState<CollectionCycle | null>(null);
+  const [waResult, setWaResult] = useState<{ sent: number; skipped: number } | null>(null);
+
+  const waMutation = useMutation({
+    mutationFn: () => sendBulkWhatsAppReminder(activePropertyId),
+    onSuccess: (result) => {
+      setWaResult({ sent: result.sent, skipped: result.skipped });
+      toast.success(`WhatsApp reminders sent to ${result.sent} tenant${result.sent !== 1 ? 's' : ''}`);
+    },
+    onError: () => toast.error('Failed to send WhatsApp reminders'),
+  });
 
   const debouncedSearch = useDebounce(search);
 
@@ -50,6 +72,8 @@ export default function OverduePage() {
   }, [properties, selectedPropertyId]);
 
   const activePropertyId = selectedPropertyId || properties[0]?.id || '';
+  // Reset WA result when property or data changes
+  useEffect(() => { setWaResult(null); }, [activePropertyId]);
 
   const { data, isLoading } = useQuery({
     queryKey: ['overdue', activePropertyId, debouncedSearch],
@@ -112,7 +136,30 @@ export default function OverduePage() {
             className="input-field pl-9 text-sm"
           />
         </div>
+
+        {/* WhatsApp bulk reminder */}
+        {cycles.length > 0 && (
+          <button
+            onClick={() => waMutation.mutate()}
+            disabled={waMutation.isPending}
+            className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white text-sm font-medium rounded-lg hover:bg-green-700 disabled:opacity-60 transition-colors"
+          >
+            <MessageCircle className="w-4 h-4" />
+            {waMutation.isPending ? 'Sending…' : `Send WA Reminders (${cycles.length})`}
+          </button>
+        )}
       </div>
+
+      {/* WA result banner */}
+      {waResult && (
+        <div className="bg-green-50 border border-green-200 rounded-xl px-4 py-3 flex items-center gap-3">
+          <CheckCircle2 className="w-5 h-5 text-green-600 shrink-0" />
+          <p className="text-sm text-green-800">
+            WhatsApp reminders sent to <strong>{waResult.sent}</strong> tenant{waResult.sent !== 1 ? 's' : ''}.
+            {waResult.skipped > 0 && ` ${waResult.skipped} skipped (no phone number on file).`}
+          </p>
+        </div>
+      )}
 
       {/* Alert banner */}
       {cycles.length > 0 && (
