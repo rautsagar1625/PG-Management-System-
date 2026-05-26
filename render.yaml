@@ -1,0 +1,91 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# Render.com deployment configuration
+# Docs: https://render.com/docs/blueprint-spec
+#
+# Deploy:
+#   1. Push this file to GitHub
+#   2. Go to dashboard.render.com → New → Blueprint
+#   3. Connect your repo — Render reads this file and provisions everything
+#   4. Set secret env vars in the Render dashboard (DATABASE_URL, JWT_SECRET, etc.)
+# ─────────────────────────────────────────────────────────────────────────────
+
+services:
+  # ── NestJS API ─────────────────────────────────────────────────────────────
+  - type: web
+    name: pg-system-api
+    runtime: docker
+    dockerfilePath: ./apps/api/Dockerfile
+    dockerContext: .
+    plan: starter                        # upgrade to standard for production
+    region: singapore                    # closest to India for low latency
+    branch: main                         # auto-deploy on push to main
+    healthCheckPath: /api/v1/health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: "3001"
+      - key: API_PREFIX
+        value: api/v1
+      - key: DATABASE_URL
+        fromDatabase:
+          name: pg-system-db
+          property: connectionString
+      - key: REDIS_HOST
+        fromService:
+          name: pg-system-redis
+          type: redis
+          property: host
+      - key: REDIS_PORT
+        fromService:
+          name: pg-system-redis
+          type: redis
+          property: port
+      # Secret env vars — set these in Render dashboard, not here:
+      # JWT_SECRET, JWT_REFRESH_SECRET, RESEND_API_KEY, RAZORPAY_KEY_ID,
+      # RAZORPAY_KEY_SECRET, RAZORPAY_WEBHOOK_SECRET, S3_ACCESS_KEY_ID,
+      # S3_SECRET_ACCESS_KEY, S3_ENDPOINT, S3_BUCKET, TWILIO_ACCOUNT_SID,
+      # TWILIO_AUTH_TOKEN, SENTRY_DSN, APP_URL, CORS_ORIGIN
+
+  # ── Next.js Web ────────────────────────────────────────────────────────────
+  - type: web
+    name: pg-system-web
+    runtime: docker
+    dockerfilePath: ./apps/web/Dockerfile
+    dockerContext: .
+    plan: starter
+    region: singapore
+    branch: main
+    envVars:
+      - key: NEXT_PUBLIC_API_URL
+        value: https://pg-system-api.onrender.com/api/v1   # update to real API URL
+
+  # ── BullMQ Worker (same image as API, different command) ──────────────────
+  # Uncomment if you want to scale workers independently:
+  # - type: worker
+  #   name: pg-system-worker
+  #   runtime: docker
+  #   dockerfilePath: ./apps/api/Dockerfile
+  #   dockerContext: .
+  #   plan: starter
+  #   region: singapore
+  #   branch: main
+  #   envVars:
+  #     - key: NODE_ENV
+  #       value: production
+
+databases:
+  # ── PostgreSQL ─────────────────────────────────────────────────────────────
+  - name: pg-system-db
+    databaseName: pg_system
+    user: pg_system_user
+    plan: starter                        # upgrade to standard for production
+    region: singapore
+    postgresMajorVersion: 16
+
+  # ── Redis ──────────────────────────────────────────────────────────────────
+  - name: pg-system-redis
+    plan: starter
+    region: singapore
+    type: redis
+    maxmemoryPolicy: noeviction          # BullMQ requires noeviction
