@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+import { Injectable, Logger, NotFoundException, BadRequestException } from '@nestjs/common';
 import { MandateStatus } from '@prisma/client';
 import Razorpay from 'razorpay';
 
@@ -22,6 +22,7 @@ export interface UpdateMandateStatusDto {
 
 @Injectable()
 export class AutopayService {
+  private readonly logger = new Logger(AutopayService.name);
   private razorpay: Razorpay | null;
 
   constructor(private prisma: PrismaService) {
@@ -81,7 +82,8 @@ export class AutopayService {
     let mandateLink: string | undefined;
     if (this.razorpay) {
       try {
-        const planId = process.env.RAZORPAY_PLAN_ID ?? 'plan_placeholder';
+        const planId = process.env.RAZORPAY_PLAN_ID;
+        if (!planId) throw new BadRequestException('RAZORPAY_PLAN_ID is not configured — cannot create subscription mandate');
         const sub = await this.razorpay.subscriptions.create({
           plan_id: planId,
           total_count: 120,
@@ -197,7 +199,7 @@ export class AutopayService {
 
       default:
         // Unhandled event — log and ignore
-        console.log(`Unhandled Razorpay webhook event: ${event}`);
+        this.logger.warn(`Unhandled Razorpay webhook event: ${event}`);
     }
   }
 

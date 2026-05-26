@@ -11,6 +11,7 @@ import {
   ApiReadResponses,
   ApiWriteResponses,
 } from '../../common/decorators/api-responses.decorator';
+import { DocumentType } from '@prisma/client';
 import { TenantSelfService, CreateTenantComplaintDto } from './tenant-self.service';
 
 @ApiTags('Tenant Self-Service')
@@ -84,7 +85,7 @@ export class TenantSelfController {
   @ApiWriteResponses()
   uploadKycDocument(
     @CurrentUser() ctx: RequestContext,
-    @Body() dto: { type: string; documentNumber: string; fileUrl?: string },
+    @Body() dto: { type: DocumentType; documentNumber: string; fileUrl?: string },
   ) {
     return this.tenantSelfService.uploadKycDocument(ctx.userId, dto);
   }

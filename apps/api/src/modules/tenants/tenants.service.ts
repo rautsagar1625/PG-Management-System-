@@ -1,4 +1,4 @@
-import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, Injectable, InternalServerErrorException, NotFoundException } from '@nestjs/common';
 import { Prisma, TenantStatus } from '@prisma/client';
 import { PrismaClientKnownRequestError } from '@prisma/client/runtime/library';
 import { IsEmail, IsNumber, IsOptional, IsString, IsUUID, Min } from 'class-validator';
@@ -197,7 +197,7 @@ export class TenantsService {
       }
     }
 
-    throw new Error('Failed to generate a unique tenant code after 5 attempts');
+    throw new InternalServerErrorException('Failed to generate a unique tenant code after 5 attempts');
   }
 
   /**

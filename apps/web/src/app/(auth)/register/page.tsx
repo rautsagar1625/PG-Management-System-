@@ -36,8 +36,11 @@ export default function RegisterPage() {
     try {
       await signUp(data);
       router.push('/dashboard');
-    } catch (err: any) {
-      setApiError(err?.response?.data?.message || 'Registration failed. Please try again.');
+    } catch (err: unknown) {
+      const msg = err instanceof Error && 'response' in err
+        ? (err as { response?: { data?: { message?: string } } }).response?.data?.message
+        : undefined;
+      setApiError(msg ?? 'Registration failed. Please try again.');
     }
   };
 

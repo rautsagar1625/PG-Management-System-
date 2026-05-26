@@ -5,7 +5,7 @@ import { IsIn, IsOptional, IsString, MinLength } from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { CacheService } from '../../database/cache.service';
 import { PrismaService } from '../../database/prisma.service';
-import { ComplaintCategory, Priority } from '@prisma/client';
+import { ComplaintCategory, DocumentType, Priority } from '@prisma/client';
 
 const TTL_TENANT_DASHBOARD = 60; // 1 minute — tenants expect near-real-time rent status
 
@@ -329,14 +329,14 @@ export class TenantSelfService {
     return { success: true, data: docs };
   }
 
-  async uploadKycDocument(userId: string, dto: { type: string; documentNumber: string; fileUrl?: string }) {
+  async uploadKycDocument(userId: string, dto: { type: DocumentType; documentNumber: string; fileUrl?: string }) {
     const tenant = await this.prisma.tenant.findUnique({ where: { userId }, select: { id: true } });
     if (!tenant) throw new NotFoundException('Tenant not found');
 
     const doc = await this.prisma.tenantDocument.create({
       data: {
         tenantId: tenant.id,
-        type: dto.type as any,
+        type: dto.type,
         documentNumber: dto.documentNumber,
         fileUrl: dto.fileUrl,
       },

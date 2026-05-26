@@ -173,8 +173,8 @@ export default function NewTenantPage() {
       // Fast-forward: mark as visited so we can finalize room next
       try {
         await markVisited(tenant.id);
-      } catch (e) {
-        console.warn('markVisited failed (state transition may be invalid):', e);
+      } catch {
+        // markVisited may be a no-op if the lead state transition is already past VISITED — safe to ignore
       }
       advance(2);
     },
