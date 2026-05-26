@@ -27,7 +27,7 @@ interface NotificationData {
   screen?: string;  // Optional override — direct route e.g. '/(tenant)/payments'
 }
 
-const OPERATOR_ROLES = new Set(['SUPER_ADMIN', 'OWNER', 'OPERATOR', 'CO_OPERATOR', 'STAFF']);
+const OPERATOR_ROLES = new Set(['SUPER_ADMIN', 'OWNER', 'OPERATOR', 'CO_OPERATOR']);
 
 // ─── Root guard + notification wiring ────────────────────────────────────────
 
@@ -49,7 +49,14 @@ function RootGuard() {
     }
 
     if (user && inAuth) {
-      const dest = OPERATOR_ROLES.has(user.role) ? '/(operator)/' : '/(tenant)/';
+      let dest: string;
+      if (OPERATOR_ROLES.has(user.role)) {
+        dest = '/(operator)/';
+      } else if (user.role === 'STAFF') {
+        dest = '/(staff)/';
+      } else {
+        dest = '/(tenant)/';
+      }
       router.replace(dest as never);
     }
   }, [user, isLoading, segments, router]);
@@ -60,6 +67,7 @@ function RootGuard() {
       if (!user) return; // Not logged in; ignore
 
       const isOperator = OPERATOR_ROLES.has(user.role);
+      const isStaff = user.role === 'STAFF';
 
       // Explicit screen override from notification payload
       if (data.screen) {
@@ -73,16 +81,19 @@ function RootGuard() {
       switch (data.type) {
         case 'RENT':
         case 'PAYMENT':
-          router.push((isOperator ? '/(operator)/collections' : '/(tenant)/payments') as never);
+          if (isOperator) router.push('/(operator)/collections' as never);
+          else if (!isStaff) router.push('/(tenant)/payments' as never);
           break;
         case 'COMPLAINT':
-          router.push((isOperator ? '/(operator)/complaints' : '/(tenant)/complaints') as never);
+          if (isOperator) router.push('/(operator)/complaints' as never);
+          else if (isStaff) router.push('/(staff)/complaints' as never);
+          else router.push('/(tenant)/complaints' as never);
           break;
         case 'AGREEMENT':
-          if (!isOperator) router.push('/(tenant)/agreements' as never);
+          if (!isOperator && !isStaff) router.push('/(tenant)/agreements' as never);
           break;
         case 'SYSTEM':
-          if (!isOperator) router.push('/(tenant)/notifications' as never);
+          if (!isOperator && !isStaff) router.push('/(tenant)/notifications' as never);
           break;
         default:
           // No deep-link action for unknown types

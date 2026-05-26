@@ -20,6 +20,7 @@ import {
   TrendingUp,
   CreditCard,
   Settings,
+  ShieldAlert,
 } from 'lucide-react';
 import { cn, getInitials } from '@/lib/utils';
 import { useAuth } from '@/providers/AuthProvider';
@@ -72,6 +73,14 @@ const NAV_GROUPS = [
   },
 ];
 
+// Super-admin only nav group — merged at render time if role matches
+const SUPER_ADMIN_NAV = {
+  label: 'Platform',
+  items: [
+    { href: '/dashboard/admin', label: 'Admin Console', icon: ShieldAlert, exact: false },
+  ],
+};
+
 interface SidebarProps {
   isOpen?: boolean;
   onClose?: () => void;
@@ -80,6 +89,9 @@ interface SidebarProps {
 export function Sidebar({ isOpen = false, onClose }: SidebarProps) {
   const pathname = usePathname();
   const { user, signOut } = useAuth();
+  const navGroups = user?.systemRole === 'SUPER_ADMIN'
+    ? [...NAV_GROUPS, SUPER_ADMIN_NAV]
+    : NAV_GROUPS;
 
   return (
     <>
@@ -129,7 +141,7 @@ export function Sidebar({ isOpen = false, onClose }: SidebarProps) {
 
         {/* Nav groups */}
         <nav className="flex-1 px-3 py-4 overflow-y-auto space-y-5">
-          {NAV_GROUPS.map((group) => (
+          {navGroups.map((group) => (
             <div key={group.label}>
               <p className="text-[10px] font-bold uppercase tracking-widest text-gray-500 px-3 mb-1">
                 {group.label}

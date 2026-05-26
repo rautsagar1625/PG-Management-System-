@@ -27,6 +27,7 @@ const BREADCRUMB_MAP: Record<string, string> = {
   '/dashboard/autopay': 'Autopay',
   '/dashboard/settings': 'Settings',
   '/dashboard/receipts': 'Receipts',
+  '/dashboard/admin': 'Admin Console',
 };
 
 function getPageTitle(pathname: string): string {
