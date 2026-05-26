@@ -36,14 +36,27 @@ async function saveNotificationPreferences(preferences: Record<string, { email: 
   return data;
 }
 
+async function getWhatsAppStatus(): Promise<{ connected: boolean; from: string; provider: string }> {
+  const { data } = await apiClient.get<{ success: boolean; data: { connected: boolean; from: string; provider: string } }>(
+    '/whatsapp/status',
+  );
+  return data.data;
+}
+
+async function sendWhatsAppTest() {
+  const { data } = await apiClient.post<{ success: boolean; data: { sentTo: string } }>('/whatsapp/test', {});
+  return data.data;
+}
+
 // ── Types ─────────────────────────────────────────────────────────────────────
 
-type SettingsTab = 'profile' | 'security' | 'notifications';
+type SettingsTab = 'profile' | 'security' | 'notifications' | 'integrations';
 
 const TABS: { id: SettingsTab; label: string; icon: React.ElementType }[] = [
   { id: 'profile', label: 'Profile', icon: User },
   { id: 'security', label: 'Security', icon: Lock },
   { id: 'notifications', label: 'Notifications', icon: Bell },
+  { id: 'integrations', label: 'Integrations', icon: Shield },
 ];
 
 // ── Page ──────────────────────────────────────────────────────────────────────
@@ -88,6 +101,7 @@ export default function SettingsPage() {
           {tab === 'profile' && <ProfileSection user={user} />}
           {tab === 'security' && <SecuritySection />}
           {tab === 'notifications' && <NotificationsSection />}
+          {tab === 'integrations' && <IntegrationsSection />}
         </div>
       </div>
     </div>
@@ -419,6 +433,89 @@ function NotificationsSection() {
         >
           {saveMutation.isPending ? 'Saving…' : saved ? <><Check className="w-4 h-4" /> Saved</> : 'Save Preferences'}
         </button>
+      </div>
+    </div>
+  );
+}
+
+// ── Integrations Section ──────────────────────────────────────────────────────
+
+function IntegrationsSection() {
+  const { data: waStatus, isLoading: waLoading } = useQuery({
+    queryKey: ['whatsapp-status'],
+    queryFn: getWhatsAppStatus,
+    retry: false,          // don't hammer if Twilio creds not set
+    staleTime: 60_000,     // re-check at most once per minute
+  });
+
+  const testMutation = useMutation({
+    mutationFn: sendWhatsAppTest,
+    onSuccess: (data) => toast.success(`Test message sent to ${data.sentTo}`),
+    onError: (err: unknown) => {
+      const msg = err instanceof Error ? err.message : 'Failed to send test message';
+      toast.error(msg);
+    },
+  });
+
+  const connected = waStatus?.connected ?? false;
+
+  return (
+    <div className="space-y-6">
+      <div>
+        <h2 className="text-base font-semibold text-gray-900">Integrations</h2>
+        <p className="text-sm text-gray-400 mt-0.5">Third-party services connected to your account.</p>
+      </div>
+
+      {/* WhatsApp / Twilio */}
+      <div className="border border-gray-200 rounded-xl overflow-hidden">
+        <div className="flex items-center justify-between px-5 py-4 bg-gray-50 border-b border-gray-200">
+          <div className="flex items-center gap-3">
+            <div className="w-9 h-9 rounded-lg bg-green-100 flex items-center justify-center text-lg">💬</div>
+            <div>
+              <p className="text-sm font-semibold text-gray-900">WhatsApp (Twilio)</p>
+              <p className="text-xs text-gray-400">Sends rent reminders and alerts to tenants</p>
+            </div>
+          </div>
+          {waLoading ? (
+            <span className="text-xs text-gray-400">Checking…</span>
+          ) : (
+            <span className={`inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-full ${
+              connected ? 'bg-green-100 text-green-700' : 'bg-red-50 text-red-600'
+            }`}>
+              <span className={`w-1.5 h-1.5 rounded-full ${connected ? 'bg-green-500' : 'bg-red-400'}`} />
+              {connected ? 'Connected' : 'Not configured'}
+            </span>
+          )}
+        </div>
+
+        <div className="px-5 py-4 space-y-3">
+          {connected && waStatus && (
+            <p className="text-xs text-gray-500">
+              Sending from: <span className="font-mono text-gray-700">{waStatus.from}</span> via {waStatus.provider}
+            </p>
+          )}
+
+          {!connected && (
+            <p className="text-sm text-gray-500">
+              Set <code className="text-xs bg-gray-100 px-1 py-0.5 rounded">TWILIO_ACCOUNT_SID</code>,{' '}
+              <code className="text-xs bg-gray-100 px-1 py-0.5 rounded">TWILIO_AUTH_TOKEN</code>, and{' '}
+              <code className="text-xs bg-gray-100 px-1 py-0.5 rounded">TWILIO_WHATSAPP_FROM</code>{' '}
+              in your environment to enable WhatsApp notifications.
+            </p>
+          )}
+
+          <button
+            onClick={() => testMutation.mutate()}
+            disabled={!connected || testMutation.isPending}
+            className="flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-lg border border-gray-200 text-gray-700 hover:bg-gray-50 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+          >
+            {testMutation.isPending ? 'Sending…' : '📨 Send test message to my phone'}
+          </button>
+
+          <p className="text-xs text-gray-400">
+            Sends a short WhatsApp message to the phone number on your profile to verify the integration end-to-end.
+          </p>
+        </div>
       </div>
     </div>
   );

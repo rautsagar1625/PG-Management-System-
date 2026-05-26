@@ -21,6 +21,18 @@ export class WhatsAppService {
     }
   }
 
+  /** WA-001: Returns connection status for the settings UI. */
+  getStatus() {
+    return {
+      success: true,
+      data: {
+        connected: this.client !== null,
+        from: this.from,
+        provider: 'Twilio',
+      },
+    };
+  }
+
   async sendMessage(to: string, body: string): Promise<void> {
     if (!this.client) {
       this.logger.log(`[WHATSAPP] To: ${to} | Body: ${body}`);
