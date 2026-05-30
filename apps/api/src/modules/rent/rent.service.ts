@@ -14,7 +14,7 @@ import { DOMAIN_EVENTS, PaymentRecordedEvent } from '../../events/domain-events'
 
 export class RecordPaymentDto {
   @ApiProperty({ example: 'uuid-of-tenant' })
-  @IsUUID()
+  @IsString()
   tenantId: string;
 
   @ApiPropertyOptional({ example: 'uuid-of-rent-cycle', description: 'Required for RENT type payments' })
@@ -60,7 +60,7 @@ export class RentService {
     private prisma: PrismaService,
     private eventEmitter: EventEmitter2,
     private cache: CacheService,
-  ) {}
+  ) { }
 
   /**
    * Generate rent cycles for all active tenants in a property for a given month/year.
@@ -277,8 +277,8 @@ export class RentService {
               // Activate tenant if they were DEPOSIT_PENDING
               ...(tenantData.status === 'DEPOSIT_PENDING' &&
                 depositStatus === 'PAID' && {
-                  status: 'ACTIVE',
-                }),
+                status: 'ACTIVE',
+              }),
             },
           });
         }

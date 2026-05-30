@@ -93,12 +93,18 @@ export class SettlementsService {
     }
 
     // Build breakdown for audit trail
-    const rentCycleSummary = await this.prisma.rentCycle.groupBy({
+    const rawRentCycleSummary = await this.prisma.rentCycle.groupBy({
       by: ['status'],
       where: { propertyId, month, year },
       _count: { _all: true },
       _sum: { paidAmount: true },
     });
+
+    const rentCycleSummary = rawRentCycleSummary.map((group) => ({
+      status: group.status,
+      count: group._count._all,
+      paidAmount: Number(group._sum.paidAmount ?? 0),
+    }));
 
     const breakdown = {
       financialModelType: financialModel.type,

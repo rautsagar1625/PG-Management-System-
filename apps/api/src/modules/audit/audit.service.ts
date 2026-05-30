@@ -36,6 +36,12 @@ function truncatePayload(
   };
 }
 
+function parseDate(d?: string): Date | undefined {
+  if (!d) return undefined;
+  const date = new Date(d);
+  return isNaN(date.getTime()) ? undefined : date;
+}
+
 @Injectable()
 export class AuditService {
   constructor(private prisma: PrismaService) {}
@@ -117,16 +123,19 @@ export class AuditService {
     const cappedLimit = Math.min(limit, 200);
     const skip = (page - 1) * cappedLimit;
 
+    const parsedFrom = parseDate(dateFrom);
+    const parsedTo = parseDate(dateTo ? dateTo + 'T23:59:59Z' : undefined);
+
     const where: Prisma.AuditLogWhereInput = {
       ...(propertyId && { propertyId }),
       ...(userId && { userId }),
       ...(entity && { entity }),
       ...(action && { action: { contains: action, mode: 'insensitive' } }),
-      ...(dateFrom || dateTo
+      ...((parsedFrom || parsedTo)
         ? {
             createdAt: {
-              ...(dateFrom && { gte: new Date(dateFrom) }),
-              ...(dateTo && { lte: new Date(dateTo + 'T23:59:59Z') }),
+              ...(parsedFrom && { gte: parsedFrom }),
+              ...(parsedTo && { lte: parsedTo }),
             },
           }
         : {}),

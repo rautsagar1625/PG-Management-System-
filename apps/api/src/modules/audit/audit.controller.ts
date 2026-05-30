@@ -8,7 +8,7 @@ import { AuditService } from './audit.service';
 @ApiTags('Audit')
 @ApiBearerAuth()
 @UseGuards(JwtAuthGuard)
-@PropertyRoles('OWNER', 'OPERATOR')
+@PropertyRoles('OWNER', 'OPERATOR', 'CO_OPERATOR', 'STAFF')
 @Controller('audit')
 export class AuditController {
   constructor(private auditService: AuditService) {}

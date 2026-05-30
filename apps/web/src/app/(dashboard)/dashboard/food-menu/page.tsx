@@ -110,7 +110,7 @@ export default function FoodMenuPage() {
 
   // Build lookup: `${dayOfWeek}_${mealType}` → entry
   const menuMap = new Map<string, FoodMenuEntry>(
-    menuEntries.map((e) => [`${e.dayOfWeek}_${e.mealType}`, e]),
+    Array.isArray(menuEntries) ? menuEntries.map((e) => [`${e.dayOfWeek}_${e.mealType}`, e]) : [],
   );
 
   const upsertMutation = useMutation({

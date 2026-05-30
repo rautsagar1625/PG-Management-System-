@@ -14,7 +14,11 @@ const registerSchema = z.object({
   name: z.string().min(2, 'Name must be at least 2 characters'),
   email: z.string().email('Enter a valid email'),
   phone: z.string().regex(/^[6-9]\d{9}$/, 'Enter a valid 10-digit mobile number'),
-  password: z.string().min(6, 'Password must be at least 6 characters'),
+  password: z
+    .string()
+    .min(8, 'Password must be at least 8 characters')
+    .regex(/[A-Z]/, 'Password must contain at least one uppercase letter')
+    .regex(/[0-9]/, 'Password must contain at least one number'),
 });
 
 type RegisterForm = z.infer<typeof registerSchema>;
@@ -45,18 +49,18 @@ export default function RegisterPage() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50 px-4">
+    <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-950 px-4">
       <div className="w-full max-w-md">
         {/* Logo */}
         <div className="flex flex-col items-center mb-8">
-          <div className="w-12 h-12 bg-primary-600 rounded-xl flex items-center justify-center mb-4">
+          <div className="w-12 h-12 bg-primary-600 rounded-xl flex items-center justify-center mb-4 shadow-elevated">
             <Building2 className="w-6 h-6 text-white" />
           </div>
-          <h1 className="text-2xl font-bold text-gray-900">Create account</h1>
-          <p className="text-sm text-gray-500 mt-1">Start managing your PG properties</p>
+          <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">Create account</h1>
+          <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">Start managing your PG properties</p>
         </div>
 
-        <div className="card p-8">
+        <div className="card p-8 shadow-elevated">
           <form onSubmit={handleSubmit(onSubmit)} className="space-y-5">
             <FormField label="Full name" error={errors.name?.message} required>
               <Input
@@ -85,7 +89,7 @@ export default function RegisterPage() {
               />
             </FormField>
 
-            <FormField label="Password" error={errors.password?.message} required hint="Minimum 6 characters">
+            <FormField label="Password" error={errors.password?.message} required hint="Min 8 chars, 1 uppercase, 1 number">
               <div className="relative">
                 <Input
                   {...register('password')}
@@ -107,7 +111,7 @@ export default function RegisterPage() {
             </FormField>
 
             {apiError && (
-              <div className="bg-red-50 border border-red-200 rounded-lg px-4 py-3 text-sm text-red-700">
+              <div className="bg-red-50 border border-red-200 rounded-xl px-4 py-3 text-sm text-red-700 dark:bg-red-950/30 dark:border-red-800 dark:text-red-400">
                 {apiError}
               </div>
             )}
@@ -123,7 +127,7 @@ export default function RegisterPage() {
           </form>
         </div>
 
-        <p className="text-center text-sm text-gray-500 mt-6">
+        <p className="text-center text-sm text-gray-500 dark:text-gray-400 mt-6">
           Already have an account?{' '}
           <Link href="/login" className="text-primary-600 font-medium hover:underline">
             Sign in

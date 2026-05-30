@@ -21,7 +21,6 @@ import {
   IsNumber,
   IsOptional,
   IsString,
-  IsUUID,
   Min,
 } from 'class-validator';
 import { Type } from 'class-transformer';
@@ -50,7 +49,7 @@ export class ScheduleVisitDto {
 }
 
 export class MoveInDto {
-  @IsUUID()
+  @IsString()
   bedId: string;
 
   @IsDateString()
@@ -114,7 +113,7 @@ export class MoveOutDto {
 }
 
 export class RoomTransferDto {
-  @IsUUID()
+  @IsString()
   newBedId: string;
 
   @IsDateString()

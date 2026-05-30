@@ -241,6 +241,7 @@ export default function NewTenantPage() {
     createMutation.isPending || finalizeMutation.isPending || moveInMutation.isPending;
 
   const handleStep1 = () => {
+    if (isPending) return;
     setError('');
     if (!state.name.trim()) return setError('Name is required');
     if (!state.email.trim() || !state.email.includes('@')) return setError('Valid email is required');
@@ -250,12 +251,14 @@ export default function NewTenantPage() {
   };
 
   const handleStep2 = () => {
+    if (isPending) return;
     setError('');
     if (!state.selectedBedId) return setError('Select a bed first');
     finalizeMutation.mutate();
   };
 
   const handleStep3 = () => {
+    if (isPending) return;
     setError('');
     if (!state.moveInDate) return setError('Move-in date is required');
     moveInMutation.mutate();
@@ -557,18 +560,25 @@ function Step2SelectBed({
       )}
 
       <div className="flex justify-between pt-2">
-        <button onClick={onBack} className="btn-secondary flex items-center gap-2 text-sm">
+        <button
+          onClick={onBack}
+          disabled={isPending}
+          className="btn-secondary flex items-center gap-2 text-sm disabled:opacity-50"
+        >
           <ArrowLeft className="w-4 h-4" />
           Back
         </button>
         <button
           onClick={onNext}
           disabled={isPending || !state.selectedBedId}
-          className="btn-primary flex items-center gap-2"
+          className="btn-primary flex items-center gap-2 disabled:opacity-50"
         >
-          {isPending && <Loader2 className="w-4 h-4 animate-spin" />}
-          <ArrowRight className="w-4 h-4" />
-          Next — Move-in Details
+          {isPending ? (
+            <Loader2 className="w-4 h-4 animate-spin" />
+          ) : (
+            <ArrowRight className="w-4 h-4" />
+          )}
+          {isPending ? 'Finalizing bed...' : 'Next — Move-in Details'}
         </button>
       </div>
     </div>
@@ -683,17 +693,25 @@ function Step3MoveIn({
       )}
 
       <div className="flex justify-between pt-2">
-        <button onClick={onBack} className="btn-secondary flex items-center gap-2 text-sm">
+        <button
+          onClick={onBack}
+          disabled={isPending}
+          className="btn-secondary flex items-center gap-2 text-sm disabled:opacity-50"
+        >
           <ArrowLeft className="w-4 h-4" />
           Back
         </button>
         <button
           onClick={onNext}
           disabled={isPending}
-          className="btn-primary flex items-center gap-2"
+          className="btn-primary flex items-center gap-2 disabled:opacity-50"
         >
-          {isPending && <Loader2 className="w-4 h-4 animate-spin" />}
-          Complete Move-in
+          {isPending ? (
+            <Loader2 className="w-4 h-4 animate-spin" />
+          ) : (
+            <ArrowRight className="w-4 h-4" />
+          )}
+          {isPending ? 'Onboarding tenant...' : 'Complete Move-in'}
         </button>
       </div>
     </div>

@@ -17,11 +17,20 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     const stored = localStorage.getItem('pg-theme') as Theme | null;
-    const preferred =
-      stored ??
-      (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+    const media = window.matchMedia('(prefers-color-scheme: dark)');
+
+    const preferred = stored ?? (media.matches ? 'dark' : 'light');
     apply(preferred);
     setMounted(true);
+
+    const listener = (e: MediaQueryListEvent) => {
+      if (!localStorage.getItem('pg-theme')) {
+        apply(e.matches ? 'dark' : 'light');
+      }
+    };
+
+    media.addEventListener('change', listener);
+    return () => media.removeEventListener('change', listener);
   }, []);
 
   function apply(t: Theme) {

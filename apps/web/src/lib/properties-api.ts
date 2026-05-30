@@ -75,12 +75,16 @@ export interface OperatorDashboard {
 
 export interface CreatePropertyDto {
   name: string;
-  address: string;
-  city: string;
-  state: string;
-  pincode: string;
+  address: {
+    line1: string;
+    line2?: string;
+    city: string;
+    state: string;
+    pincode: string;
+  };
   type: PropertyType;
   amenities?: string[];
+  rules?: string[];
 }
 
 export interface SetFinancialModelDto {

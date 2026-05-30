@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -89,6 +89,8 @@ export default function NewPropertyPage() {
     handleSubmit,
     watch,
     trigger,
+    setValue,
+    clearErrors,
     formState: { errors },
   } = useForm<FormData>({
     resolver: zodResolver(schema),
@@ -99,15 +101,34 @@ export default function NewPropertyPage() {
   const watched = watch();
   const financialModel = watched.financialModelType;
 
+  // Clear errors and fields of unselected models to prevent validation lock
+  useEffect(() => {
+    if (financialModel === 'OWNER_OPERATED') {
+      setValue('fixedOwnerPayout', undefined);
+      setValue('ownerSharePercent', undefined);
+      setValue('operatorSharePercent', undefined);
+      clearErrors(['fixedOwnerPayout', 'ownerSharePercent', 'operatorSharePercent']);
+    } else if (financialModel === 'FIXED_PAYOUT') {
+      setValue('ownerSharePercent', undefined);
+      setValue('operatorSharePercent', undefined);
+      clearErrors(['ownerSharePercent', 'operatorSharePercent']);
+    } else if (financialModel === 'REVENUE_SHARE') {
+      setValue('fixedOwnerPayout', undefined);
+      clearErrors(['fixedOwnerPayout']);
+    }
+  }, [financialModel, setValue, clearErrors]);
+
   const mutation = useMutation({
     mutationFn: async (data: FormData) => {
       const property = await createProperty({
         name: data.name,
-        address: data.address,
-        city: data.city,
-        state: data.state,
-        pincode: data.pincode,
         type: data.type,
+        address: {
+          line1: data.address,
+          city: data.city,
+          state: data.state,
+          pincode: data.pincode,
+        },
       });
       await setFinancialModel(property.id, {
         type: data.financialModelType,
@@ -138,6 +159,7 @@ export default function NewPropertyPage() {
   const goBack = () => setStep((s) => (s - 1) as StepId);
 
   const onSubmit = (data: FormData) => {
+    if (mutation.isPending) return;
     setApiError('');
     mutation.mutate(data);
   };
@@ -393,11 +415,21 @@ export default function NewPropertyPage() {
         {/* Navigation */}
         <div className="flex gap-3 mt-5">
           {step > 1 ? (
-            <button type="button" onClick={goBack} className="btn-secondary flex items-center gap-1.5">
+            <button
+              type="button"
+              onClick={goBack}
+              disabled={mutation.isPending}
+              className="btn-secondary flex items-center gap-1.5 disabled:opacity-50"
+            >
               <ArrowLeft className="w-4 h-4" /> Back
             </button>
           ) : (
-            <button type="button" onClick={() => router.back()} className="btn-secondary">
+            <button
+              type="button"
+              onClick={() => router.back()}
+              disabled={mutation.isPending}
+              className="btn-secondary disabled:opacity-50"
+            >
               Cancel
             </button>
           )}

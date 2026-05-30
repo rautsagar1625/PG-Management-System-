@@ -108,7 +108,7 @@ export function Sidebar({ isOpen = false, onClose }: SidebarProps) {
       <aside
         className={cn(
           'w-64 shrink-0 flex flex-col',
-          'bg-gray-950',
+          'bg-white dark:bg-gray-950 border-r border-gray-100 dark:border-white/10',
           'md:sticky md:top-0 md:h-screen',
           'fixed inset-y-0 left-0 z-50 h-full md:relative md:z-auto',
           isOpen ? 'translate-x-0 animate-slide-in-left' : '-translate-x-full md:translate-x-0',
@@ -118,7 +118,7 @@ export function Sidebar({ isOpen = false, onClose }: SidebarProps) {
       >
         {/* Brand header */}
         <div
-          className="flex items-center justify-between px-5 h-16 shrink-0 border-b border-white/10"
+          className="flex items-center justify-between px-5 h-16 shrink-0 border-b border-gray-100 dark:border-white/10"
           style={{ background: 'linear-gradient(135deg, #312e81 0%, #4338ca 100%)' }}
         >
           <div className="flex items-center gap-3">
@@ -143,7 +143,7 @@ export function Sidebar({ isOpen = false, onClose }: SidebarProps) {
         <nav className="flex-1 px-3 py-4 overflow-y-auto space-y-5">
           {navGroups.map((group) => (
             <div key={group.label}>
-              <p className="text-[10px] font-bold uppercase tracking-widest text-gray-500 px-3 mb-1">
+              <p className="text-[10px] font-bold uppercase tracking-widest text-gray-400 dark:text-gray-500 px-3 mb-1">
                 {group.label}
               </p>
               <div className="space-y-0.5">
@@ -160,20 +160,20 @@ export function Sidebar({ isOpen = false, onClose }: SidebarProps) {
                       className={cn(
                         'group relative flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-150',
                         isActive
-                          ? 'bg-white/10 text-white shadow-sm'
-                          : 'text-gray-400 hover:bg-white/5 hover:text-gray-200',
+                          ? 'bg-primary-50 dark:bg-white/10 text-primary-600 dark:text-white shadow-sm'
+                          : 'text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-white/5 hover:text-gray-900 dark:hover:text-gray-200',
                       )}
                     >
                       {/* Active indicator bar */}
                       {isActive && (
-                        <span className="absolute left-0 top-1/2 -translate-y-1/2 w-0.5 h-5 rounded-r-full bg-indigo-400" />
+                        <span className="absolute left-0 top-1/2 -translate-y-1/2 w-0.5 h-5 rounded-r-full bg-primary-600 dark:bg-indigo-400" />
                       )}
                       <Icon
                         className={cn(
                           'w-4 h-4 shrink-0 transition-colors',
                           isActive
-                            ? 'text-indigo-300'
-                            : 'text-gray-500 group-hover:text-gray-300',
+                            ? 'text-primary-600 dark:text-indigo-300'
+                            : 'text-gray-400 dark:text-gray-500 group-hover:text-gray-600 dark:group-hover:text-gray-300',
                         )}
                       />
                       <span className="flex-1">{label}</span>
@@ -186,25 +186,25 @@ export function Sidebar({ isOpen = false, onClose }: SidebarProps) {
         </nav>
 
         {/* User footer */}
-        <div className="px-3 pb-4 pt-3 border-t border-white/10 shrink-0 space-y-1">
-          <div className="flex items-center gap-3 px-3 py-2.5 rounded-xl bg-white/5 border border-white/8">
+        <div className="px-3 pb-4 pt-3 border-t border-gray-100 dark:border-white/10 shrink-0 space-y-1">
+          <div className="flex items-center gap-3 px-3 py-2.5 rounded-xl bg-gray-50 dark:bg-white/5 border border-gray-100 dark:border-white/8">
             <div className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold text-white shrink-0"
               style={{ background: 'linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%)' }}
             >
               {user ? getInitials(user.name) : '?'}
             </div>
             <div className="flex-1 min-w-0">
-              <p className="text-sm font-semibold text-gray-100 truncate leading-none">
+              <p className="text-sm font-semibold text-gray-900 dark:text-gray-100 truncate leading-none">
                 {user?.name}
               </p>
-              <p className="text-xs text-gray-500 truncate mt-0.5">{user?.email}</p>
+              <p className="text-xs text-gray-500 dark:text-gray-500 truncate mt-0.5">{user?.email}</p>
             </div>
           </div>
           <button
             onClick={() => { signOut(); onClose?.(); }}
-            className="flex items-center gap-3 w-full px-3 py-2 rounded-xl text-sm text-gray-500 hover:bg-red-500/10 hover:text-red-400 transition-colors duration-150 group"
+            className="flex items-center gap-3 w-full px-3 py-2 rounded-xl text-sm text-gray-500 dark:text-gray-400 hover:bg-red-500/10 hover:text-red-400 dark:hover:bg-red-950/20 transition-colors duration-150 group"
           >
-            <LogOut className="w-4 h-4 shrink-0 text-gray-600 group-hover:text-red-400 transition-colors" />
+            <LogOut className="w-4 h-4 shrink-0 text-gray-400 dark:text-gray-500 group-hover:text-red-500 dark:group-hover:text-red-400 transition-colors" />
             Sign out
           </button>
         </div>

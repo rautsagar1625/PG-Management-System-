@@ -28,9 +28,15 @@ export default function ResetPasswordPage() {
       setDone(true);
       setTimeout(() => router.push('/login'), 2500);
     } catch (err: unknown) {
-      const msg = (err as { response?: { data?: { error?: { message?: string } } } })
-        ?.response?.data?.error?.message;
-      setError(msg ?? 'Invalid or expired link. Please request a new one.');
+      const errorData = (err as any)?.response?.data;
+      const msg = errorData?.error?.message || errorData?.message;
+      if (Array.isArray(msg)) {
+        setError(msg.join('. '));
+      } else if (typeof msg === 'string') {
+        setError(msg);
+      } else {
+        setError('Invalid or expired link. Please request a new one.');
+      }
     } finally {
       setLoading(false);
     }
@@ -38,10 +44,10 @@ export default function ResetPasswordPage() {
 
   if (!token) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50 px-4">
-        <div className="card p-8 max-w-md w-full text-center">
-          <p className="text-gray-700 font-medium">Invalid reset link.</p>
-          <Link href="/forgot-password" className="text-primary-600 text-sm mt-3 inline-block hover:underline">
+      <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-950 px-4">
+        <div className="card p-8 max-w-md w-full text-center shadow-elevated">
+          <p className="text-gray-700 dark:text-gray-300 font-medium">Invalid reset link.</p>
+          <Link href="/forgot-password" className="text-primary-600 text-sm mt-3 inline-block hover:underline font-semibold">
             Request a new one
           </Link>
         </div>
@@ -50,22 +56,22 @@ export default function ResetPasswordPage() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50 px-4">
+    <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-950 px-4">
       <div className="w-full max-w-md">
         <div className="flex flex-col items-center mb-8">
-          <div className="w-12 h-12 bg-primary-600 rounded-xl flex items-center justify-center mb-4">
+          <div className="w-12 h-12 bg-primary-600 rounded-xl flex items-center justify-center mb-4 shadow-elevated">
             <Building2 className="w-6 h-6 text-white" />
           </div>
-          <h1 className="text-2xl font-bold text-gray-900">Set new password</h1>
-          <p className="text-sm text-gray-500 mt-1">Choose a strong password</p>
+          <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">Set new password</h1>
+          <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">Choose a strong password</p>
         </div>
 
-        <div className="card p-8">
+        <div className="card p-8 shadow-elevated">
           {done ? (
             <div className="flex flex-col items-center text-center gap-3 py-4">
               <CheckCircle2 className="w-10 h-10 text-green-500" />
-              <p className="font-semibold text-gray-900">Password updated!</p>
-              <p className="text-sm text-gray-500">Redirecting you to sign in…</p>
+              <p className="font-semibold text-gray-900 dark:text-gray-100">Password updated!</p>
+              <p className="text-sm text-gray-500 dark:text-gray-400">Redirecting you to sign in…</p>
             </div>
           ) : (
             <form onSubmit={submit} className="space-y-5">
@@ -87,7 +93,7 @@ export default function ResetPasswordPage() {
                     type="button"
                     tabIndex={-1}
                     onClick={() => setShowPassword((v) => !v)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors"
                   >
                     {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                   </button>
@@ -95,7 +101,7 @@ export default function ResetPasswordPage() {
               </FormField>
 
               {error && (
-                <div className="bg-red-50 border border-red-200 rounded-lg px-4 py-3 text-sm text-red-700">
+                <div className="bg-red-50 border border-red-200 rounded-xl px-4 py-3 text-sm text-red-700 dark:bg-red-950/30 dark:border-red-800 dark:text-red-400">
                   {error}
                 </div>
               )}
@@ -113,8 +119,8 @@ export default function ResetPasswordPage() {
         </div>
 
         {!done && (
-          <p className="text-center text-sm text-gray-500 mt-6">
-            <Link href="/login" className="text-primary-600 font-medium hover:underline">
+          <p className="text-center text-sm text-gray-500 dark:text-gray-400 mt-6">
+            <Link href="/login" className="text-primary-600 font-semibold hover:underline">
               Back to sign in
             </Link>
           </p>

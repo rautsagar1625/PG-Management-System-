@@ -36,6 +36,7 @@ export default function LoginPage() {
   const {
     register,
     handleSubmit,
+    setValue,
     formState: { errors, isSubmitting },
   } = useForm<LoginForm>({ resolver: zodResolver(loginSchema) });
 
@@ -43,14 +44,13 @@ export default function LoginPage() {
     setApiError('');
     try {
       await signIn(data);
-      router.push('/dashboard');
+      router.replace('/dashboard');
     } catch (err: unknown) {
-      const e = err as { response?: { data?: { error?: { message?: string }; message?: string } } };
-      setApiError(
-        e?.response?.data?.error?.message ||
-        e?.response?.data?.message ||
-        'Invalid credentials. Please try again.',
-      );
+      setValue('password', '');
+      const msg = err instanceof Error && 'response' in err
+        ? (err as { response?: { data?: { message?: string } } }).response?.data?.message
+        : undefined;
+      setApiError(msg ?? 'Failed to sign in. Please try again.');
     }
   };
 

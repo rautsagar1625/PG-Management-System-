@@ -148,7 +148,7 @@ export default function LeadsPage() {
     source: 'WALK_IN',
     budget: undefined,
     moveInDate: '',
-    roomType: '',
+    roomType: undefined,
     notes: '',
   });
   const [createError, setCreateError] = useState('');
@@ -177,7 +177,7 @@ export default function LeadsPage() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['leads'] });
       setShowCreate(false);
-      setCreateForm({ name: '', phone: '', email: '', source: 'WALK_IN', budget: undefined, moveInDate: '', roomType: '', notes: '' });
+      setCreateForm({ name: '', phone: '', email: '', source: 'WALK_IN', budget: undefined, moveInDate: '', roomType: undefined, notes: '' });
       setCreateError('');
       toast.success('Lead added to pipeline');
     },
@@ -394,11 +394,23 @@ export default function LeadsPage() {
               />
             </FormField>
             <FormField label="Room Type Preference">
-              <Input
+              <select
                 value={createForm.roomType ?? ''}
-                onChange={(e) => setCreateForm((f) => ({ ...f, roomType: e.target.value }))}
-                placeholder="e.g. Single AC"
-              />
+                onChange={(e) =>
+                  setCreateForm((f) => ({
+                    ...f,
+                    roomType: e.target.value ? e.target.value : undefined,
+                  }))
+                }
+                className="input-field bg-white text-sm"
+              >
+                <option value="">Any sharing type</option>
+                <option value="PRIVATE">Single Room (Private)</option>
+                <option value="DOUBLE_SHARING">Double Sharing</option>
+                <option value="TRIPLE_SHARING">Triple Sharing</option>
+                <option value="FOUR_SHARING">Four Sharing</option>
+                <option value="SIX_SHARING">Six Sharing</option>
+              </select>
             </FormField>
             <FormField label="Notes" className="col-span-2">
               <Textarea

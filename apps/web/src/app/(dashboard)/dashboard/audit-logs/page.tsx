@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { keepPreviousData } from '@tanstack/react-query';
-import { Search, Building2, ChevronDown, ChevronLeft, ChevronRight, Shield } from 'lucide-react';
+import { Search, Building2, ChevronDown, ChevronLeft, ChevronRight, Shield, AlertCircle } from 'lucide-react';
 import { getAuditLogs, type AuditLog } from '@/lib/audit-api';
 import { getProperties } from '@/lib/properties-api';
 import { PageHeader } from '@/components/ui/PageHeader';
@@ -48,7 +48,7 @@ export default function AuditLogsPage() {
 
   const activePropertyId = propertyId || properties[0]?.id || '';
 
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, isError, error } = useQuery({
     queryKey: ['audit-logs', activePropertyId, entity, action, dateFrom, dateTo, page],
     queryFn: () =>
       getAuditLogs({
@@ -145,6 +145,12 @@ export default function AuditLogsPage() {
         {isLoading ? (
           <div className="p-12 flex items-center justify-center">
             <div className="w-6 h-6 border-2 border-primary-600 border-t-transparent rounded-full animate-spin" />
+          </div>
+        ) : isError ? (
+          <div className="p-12 text-center">
+            <AlertCircle className="w-10 h-10 text-red-500 mx-auto mb-3" />
+            <p className="text-sm font-medium text-red-700">Failed to load audit logs</p>
+            <p className="text-xs text-red-500 mt-1">{(error as Error)?.message || 'Forbidden or internal server error'}</p>
           </div>
         ) : logs.length === 0 ? (
           <div className="p-12 text-center">

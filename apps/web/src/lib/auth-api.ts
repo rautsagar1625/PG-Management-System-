@@ -12,6 +12,12 @@ export interface RegisterDto {
   password: string;
 }
 
+export interface AuthTokens {
+  accessToken: string;
+  refreshToken: string;
+  expiresIn: number;
+}
+
 export interface AuthUser {
   id: string;
   name: string;

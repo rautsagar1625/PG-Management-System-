@@ -29,8 +29,8 @@ export class FinancialController {
   }
 
   @Post()
-  @ApiOperation({ summary: 'Set/update financial model (deactivates previous) — OWNER only' })
-  @PropertyRoles('OWNER')
+  @ApiOperation({ summary: 'Set/update financial model (deactivates previous) — OWNER and OPERATOR' })
+  @PropertyRoles('OWNER', 'OPERATOR')
   set(
     @Param('propertyId') propertyId: string,
     @Body() dto: SetFinancialModelDto,

@@ -23,9 +23,19 @@ export async function middleware(request: NextRequest) {
   }
 
   const isPublicPath = PUBLIC_PATHS.some((p) => pathname.startsWith(p));
-  if (isPublicPath) return NextResponse.next();
-
   const token = request.cookies.get('pg_session')?.value;
+
+  if (isPublicPath) {
+    if (token) {
+      try {
+        await jwtVerify(token, getSecret());
+        return NextResponse.redirect(new URL('/dashboard', request.url));
+      } catch {
+        return NextResponse.next();
+      }
+    }
+    return NextResponse.next();
+  }
 
   if (!token) {
     // Allow /tenant and /staff paths through to their own login if no session

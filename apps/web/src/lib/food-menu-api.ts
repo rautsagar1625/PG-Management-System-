@@ -13,7 +13,7 @@ export interface FoodMenuEntry {
 export const getFoodMenu = (propertyId: string) =>
   apiClient
     .get('/food-menu', { params: { propertyId } })
-    .then((r) => r.data.data as FoodMenuEntry[]);
+    .then((r) => (r.data.data.entries ?? []) as FoodMenuEntry[]);
 
 export const upsertFoodMenu = (dto: Omit<FoodMenuEntry, 'id' | 'isActive'>) =>
   apiClient.post('/food-menu', dto).then((r) => r.data.data as FoodMenuEntry);

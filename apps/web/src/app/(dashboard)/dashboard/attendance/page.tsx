@@ -45,11 +45,25 @@ async function getAttendance(
   propertyId: string,
   date: string,
 ): Promise<AttendanceResponse> {
-  const { data } = await apiClient.get<{ success: boolean; data: AttendanceResponse }>(
-    '/attendance',
-    { params: { propertyId, date } },
-  );
-  return data.data;
+  const [recordsRes, summaryRes] = await Promise.all([
+    apiClient.get<{ success: boolean; data: AttendanceRecord[] }>('/attendance', {
+      params: { propertyId, date },
+    }),
+    apiClient.get<{
+      success: boolean;
+      data: { total: number; present: number };
+    }>('/attendance/summary', {
+      params: { propertyId, date },
+    }),
+  ]);
+
+  return {
+    records: recordsRes.data.data ?? [],
+    summary: {
+      total: summaryRes.data.data?.total ?? 0,
+      present: summaryRes.data.data?.present ?? 0,
+    },
+  };
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────
@@ -93,8 +107,8 @@ export default function AttendancePage() {
   });
 
   const records = data?.records ?? [];
-  const total = data?.summary.total ?? 0;
-  const present = data?.summary.present ?? 0;
+  const total = data?.summary?.total ?? 0;
+  const present = data?.summary?.present ?? 0;
   const pct = total > 0 ? Math.round((present / total) * 100) : 0;
   const absent = total - present;
 

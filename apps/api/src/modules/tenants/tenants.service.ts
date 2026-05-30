@@ -1,7 +1,7 @@
 import { BadRequestException, ForbiddenException, Injectable, InternalServerErrorException, NotFoundException } from '@nestjs/common';
 import { Prisma, TenantStatus } from '@prisma/client';
 import { PrismaClientKnownRequestError } from '@prisma/client/runtime/library';
-import { IsEmail, IsNumber, IsOptional, IsString, IsUUID, Min } from 'class-validator';
+import { IsEmail, IsNumber, IsOptional, IsString, Min, IsUUID } from 'class-validator';
 import { Type } from 'class-transformer';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
@@ -50,7 +50,7 @@ export class TenantsService {
   constructor(
     private prisma: PrismaService,
     private cache: CacheService,
-  ) {}
+  ) { }
 
   async findAll(
     ctx: RequestContext,
@@ -260,14 +260,14 @@ export class TenantsService {
     const rank = statusRank(tenant.status);
 
     const steps = {
-      LEAD_CREATED:       true,
-      VISIT_SCHEDULED:    !!tenant.visitScheduledAt || rank >= statusRank('VISIT_SCHEDULED'),
-      VISIT_COMPLETED:    !!tenant.visitedAt         || rank >= statusRank('VISITED'),
-      ROOM_FINALIZED:     rank >= statusRank('ROOM_FINALIZED'),
-      DEPOSIT_PAID:       tenant.depositCompleted,
-      KYC_VERIFIED:       tenant.kycCompleted,
-      AGREEMENT_SIGNED:   tenant.agreementSigned,
-      MOVED_IN:           !!tenant.moveInDate,
+      LEAD_CREATED: true,
+      VISIT_SCHEDULED: !!tenant.visitScheduledAt || rank >= statusRank('VISIT_SCHEDULED'),
+      VISIT_COMPLETED: !!tenant.visitedAt || rank >= statusRank('VISITED'),
+      ROOM_FINALIZED: rank >= statusRank('ROOM_FINALIZED'),
+      DEPOSIT_PAID: tenant.depositCompleted,
+      KYC_VERIFIED: tenant.kycCompleted,
+      AGREEMENT_SIGNED: tenant.agreementSigned,
+      MOVED_IN: !!tenant.moveInDate,
     };
 
     const completedSteps = (Object.keys(steps) as (keyof typeof steps)[]).filter((k) => steps[k]);
@@ -304,13 +304,13 @@ export class TenantsService {
     let nextAction: string | null = null;
     if (currentStep !== 'COMPLETED') {
       const nextActionMap: Record<string, string> = {
-        VISIT_SCHEDULED:  'Schedule a property visit',
-        VISIT_COMPLETED:  'Mark visit as completed',
-        ROOM_FINALIZED:   'Select and finalise a bed for the tenant',
-        DEPOSIT_PAID:     pendingActions[0] ?? 'Record deposit payment',
-        KYC_VERIFIED:     'Complete KYC verification',
+        VISIT_SCHEDULED: 'Schedule a property visit',
+        VISIT_COMPLETED: 'Mark visit as completed',
+        ROOM_FINALIZED: 'Select and finalise a bed for the tenant',
+        DEPOSIT_PAID: pendingActions[0] ?? 'Record deposit payment',
+        KYC_VERIFIED: 'Complete KYC verification',
         AGREEMENT_SIGNED: 'Get agreement signed',
-        MOVED_IN:         'Complete move-in to activate the tenant',
+        MOVED_IN: 'Complete move-in to activate the tenant',
       };
       nextAction = nextActionMap[currentStep] ?? null;
     }
@@ -325,9 +325,9 @@ export class TenantsService {
         pendingActions,
         nextAction,
         compliance: {
-          depositPaid:      tenant.depositCompleted,
-          kycVerified:      tenant.kycCompleted,
-          agreementSigned:  tenant.agreementSigned,
+          depositPaid: tenant.depositCompleted,
+          kycVerified: tenant.kycCompleted,
+          agreementSigned: tenant.agreementSigned,
         },
         allocation: tenant.allocations[0] ?? null,
       },

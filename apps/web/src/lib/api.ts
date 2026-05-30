@@ -18,6 +18,9 @@ apiClient.interceptors.request.use((config) => {
   return config;
 });
 
+let isRefreshing = false;
+let refreshPromise: Promise<string> | null = null;
+
 apiClient.interceptors.response.use(
   (response) => response,
   async (error) => {
@@ -33,19 +36,32 @@ apiClient.interceptors.response.use(
         return Promise.reject(error);
       }
 
+      if (!isRefreshing) {
+        isRefreshing = true;
+        refreshPromise = (async () => {
+          try {
+            const { data } = await axios.post(`${API_BASE_URL}/auth/refresh`, { refreshToken });
+            const { accessToken, refreshToken: newRefreshToken } = data.data;
+
+            setTokens(accessToken, newRefreshToken);
+            return accessToken;
+          } catch (err) {
+            clearTokens();
+            window.location.href = '/login';
+            throw err;
+          } finally {
+            isRefreshing = false;
+            refreshPromise = null;
+          }
+        })();
+      }
+
       try {
-        const { data } = await axios.post(`${API_BASE_URL}/auth/refresh`, { refreshToken });
-        const { accessToken, refreshToken: newRefreshToken } = data.data;
-
-        localStorage.setItem('access_token', accessToken);
-        localStorage.setItem('refresh_token', newRefreshToken);
-
+        const accessToken = await refreshPromise;
         originalRequest.headers.Authorization = `Bearer ${accessToken}`;
         return apiClient(originalRequest);
-      } catch {
-        clearTokens();
-        window.location.href = '/login';
-        return Promise.reject(error);
+      } catch (err) {
+        return Promise.reject(err);
       }
     }
 

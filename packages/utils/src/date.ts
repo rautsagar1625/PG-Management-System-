@@ -4,7 +4,6 @@ import {
   getDaysInMonth,
   isAfter,
   isBefore,
-  isToday,
   startOfMonth,
   endOfMonth,
   differenceInDays,

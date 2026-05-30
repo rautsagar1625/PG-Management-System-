@@ -33,10 +33,41 @@ export class PropertyRoleGuard implements CanActivate {
     // SUPER_ADMIN bypasses property role checks
     if (user.systemRole === 'SUPER_ADMIN') return true;
 
-    const propertyId =
+    let propertyId =
       request.params?.propertyId ||
       request.query?.propertyId ||
       request.body?.propertyId;
+
+    // If no propertyId is directly provided, but a tenant ID, lead ID, or complaint ID (id) is in params,
+    // look up the entity to find the propertyId.
+    if (!propertyId && request.params?.id) {
+      // 1. Check if it's a tenant ID
+      const tenant = await this.prisma.tenant.findUnique({
+        where: { id: request.params.id },
+        select: { propertyId: true },
+      });
+      if (tenant) {
+        propertyId = tenant.propertyId;
+      } else {
+        // 2. Check if it's a lead ID
+        const lead = await this.prisma.lead.findUnique({
+          where: { id: request.params.id },
+          select: { propertyId: true },
+        });
+        if (lead) {
+          propertyId = lead.propertyId;
+        } else {
+          // 3. Check if it's a complaint ID
+          const complaint = await this.prisma.complaint.findUnique({
+            where: { id: request.params.id },
+            select: { propertyId: true },
+          });
+          if (complaint) {
+            propertyId = complaint.propertyId;
+          }
+        }
+      }
+    }
 
     if (!propertyId) return false;
 

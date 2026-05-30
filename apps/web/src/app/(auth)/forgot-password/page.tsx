@@ -28,23 +28,23 @@ export default function ForgotPasswordPage() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50 px-4">
+    <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-950 px-4">
       <div className="w-full max-w-md">
         <div className="flex flex-col items-center mb-8">
-          <div className="w-12 h-12 bg-primary-600 rounded-xl flex items-center justify-center mb-4">
+          <div className="w-12 h-12 bg-primary-600 rounded-xl flex items-center justify-center mb-4 shadow-elevated">
             <Building2 className="w-6 h-6 text-white" />
           </div>
-          <h1 className="text-2xl font-bold text-gray-900">Forgot password?</h1>
-          <p className="text-sm text-gray-500 mt-1">We&apos;ll send a reset link to your email</p>
+          <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">Forgot password?</h1>
+          <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">We&apos;ll send a reset link to your email</p>
         </div>
 
-        <div className="card p-8">
+        <div className="card p-8 shadow-elevated">
           {sent ? (
             <div className="flex flex-col items-center text-center gap-3 py-4">
               <CheckCircle2 className="w-10 h-10 text-green-500" />
-              <p className="font-semibold text-gray-900">Check your inbox</p>
-              <p className="text-sm text-gray-500">
-                If <span className="font-medium">{email}</span> is registered, a reset link has been
+              <p className="font-semibold text-gray-900 dark:text-gray-100">Check your inbox</p>
+              <p className="text-sm text-gray-500 dark:text-gray-400">
+                If <span className="font-medium text-gray-900 dark:text-gray-100">{email}</span> is registered, a reset link has been
                 sent. It expires in 1 hour.
               </p>
             </div>
@@ -61,7 +61,7 @@ export default function ForgotPasswordPage() {
               </FormField>
 
               {error && (
-                <div className="bg-red-50 border border-red-200 rounded-lg px-4 py-3 text-sm text-red-700">
+                <div className="bg-red-50 border border-red-200 rounded-xl px-4 py-3 text-sm text-red-700 dark:bg-red-950/30 dark:border-red-800 dark:text-red-400">
                   {error}
                 </div>
               )}
@@ -78,7 +78,7 @@ export default function ForgotPasswordPage() {
           )}
         </div>
 
-        <p className="text-center text-sm text-gray-500 mt-6">
+        <p className="text-center text-sm text-gray-500 dark:text-gray-400 mt-6">
           <Link href="/login" className="text-primary-600 font-medium hover:underline">
             Back to sign in
           </Link>
